@@ -42,10 +42,10 @@ extern volatile uint32_t mpu_int_state;
 extern volatile uint8_t buffer[PINGPONG_SIZE], databuf[PINGPONG_SIZE];
 extern volatile uint8_t gps_int_state;
 extern uint32_t movement_counter;
+extern TIM_HandleTypeDef htim1;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
-extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim6;
 extern DMA_HandleTypeDef hdma_uart4_rx;

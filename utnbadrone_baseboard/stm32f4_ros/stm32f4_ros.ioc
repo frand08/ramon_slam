@@ -259,7 +259,6 @@ ProjectManager.KeepUserCode=true
 ProjectManager.LastFirmware=true
 ProjectManager.LibraryCopy=1
 ProjectManager.MainLocation=Src
-ProjectManager.NoMain=false
 ProjectManager.PreviousToolchain=SW4STM32
 ProjectManager.ProjectBuild=false
 ProjectManager.ProjectFileName=stm32f4_ros.ioc

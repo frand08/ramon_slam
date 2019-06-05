@@ -34,55 +34,35 @@
 #include "stm32f4xx_hal.h"
 #include "stm32f4xx.h"
 #include "stm32f4xx_it.h"
+#include "cmsis_os.h"
 
 /* USER CODE BEGIN 0 */
 #include "string.h"
 #include "mainpp.h"
-extern volatile uint32_t mpu_int_state;
+//extern volatile uint32_t mpu_int_state;
 extern volatile uint8_t buffer[PINGPONG_SIZE], databuf[PINGPONG_SIZE];
-extern volatile uint8_t gps_int_state;
+//extern volatile uint8_t gps_int_state;
 extern uint32_t movement_counter;
 extern TIM_HandleTypeDef htim1;
+extern osSemaphoreId MPUIntSemHandle;
+extern osSemaphoreId GPSIntSemHandle;
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim6;
+extern TIM_HandleTypeDef htim8;
 extern DMA_HandleTypeDef hdma_uart4_rx;
 extern DMA_HandleTypeDef hdma_usart3_rx;
 extern DMA_HandleTypeDef hdma_usart3_tx;
 extern UART_HandleTypeDef huart4;
 extern UART_HandleTypeDef huart3;
 
+extern TIM_HandleTypeDef htim14;
+
 /******************************************************************************/
 /*            Cortex-M4 Processor Interruption and Exception Handlers         */ 
 /******************************************************************************/
-
-/**
-* @brief This function handles System service call via SWI instruction.
-*/
-void SVC_Handler(void)
-{
-  /* USER CODE BEGIN SVCall_IRQn 0 */
-
-  /* USER CODE END SVCall_IRQn 0 */
-  /* USER CODE BEGIN SVCall_IRQn 1 */
-
-  /* USER CODE END SVCall_IRQn 1 */
-}
-
-/**
-* @brief This function handles Pendable request for system service.
-*/
-void PendSV_Handler(void)
-{
-  /* USER CODE BEGIN PendSV_IRQn 0 */
-
-  /* USER CODE END PendSV_IRQn 0 */
-  /* USER CODE BEGIN PendSV_IRQn 1 */
-
-  /* USER CODE END PendSV_IRQn 1 */
-}
 
 /**
 * @brief This function handles System tick timer.
@@ -92,8 +72,7 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 0 */
 
   /* USER CODE END SysTick_IRQn 0 */
-  HAL_IncTick();
-  HAL_SYSTICK_IRQHandler();
+  osSystickHandler();
   /* USER CODE BEGIN SysTick_IRQn 1 */
 
   /* USER CODE END SysTick_IRQn 1 */
@@ -116,7 +95,8 @@ void EXTI0_IRQHandler(void)
   /* USER CODE END EXTI0_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
   /* USER CODE BEGIN EXTI0_IRQn 1 */
-  mpu_int_state = 1;
+//  mpu_int_state = 1;
+  osSemaphoreRelease(MPUIntSemHandle);
 //  HAL_GPIO_TogglePin(LD4_GPIO_Port,LD4_Pin);
   /* USER CODE END EXTI0_IRQn 1 */
 }
@@ -150,7 +130,8 @@ void DMA1_Stream2_IRQHandler(void)
 	  __IO uint32_t IFCR;  /*!< DMA interrupt flag clear register */
 	} DMA_Base_Registers;
 
-	DMA_Base_Registers *regs = (DMA_Base_Registers *)hdma_uart4_rx.StreamBaseAddress;
+	/* FIXME: Para que estaba este regs? */
+//	DMA_Base_Registers *regs = (DMA_Base_Registers *)hdma_uart4_rx.StreamBaseAddress;
 
 	if(__HAL_DMA_GET_IT_SOURCE(&hdma_uart4_rx, DMA_IT_TC) != RESET)   // if the source is TC
 	{
@@ -165,7 +146,10 @@ void DMA1_Stream2_IRQHandler(void)
 			tocopy = len;
 		/* Write received data for UART main buffer for manipulation later */
 	   memcpy((void*)&databuf[Write],(const void*) buffer, tocopy);   /* Copy first part */
-	   gps_int_state = 1;
+
+	   /* EN REEMPLAZO */
+//	   gps_int_state = 1;
+	   osSemaphoreRelease(GPSIntSemHandle);
 
 //	   regs->IFCR = 0x3FU << hdma_uart4_rx.StreamIndex; // clear all interrupts
 //	   hdma_uart4_rx.Instance->FCR = 0x3FU << hdma_uart4_rx.StreamIndex;
@@ -223,6 +207,21 @@ void USART3_IRQHandler(void)
 }
 
 /**
+* @brief This function handles TIM8 trigger and commutation interrupts and TIM14 global interrupt.
+*/
+void TIM8_TRG_COM_TIM14_IRQHandler(void)
+{
+  /* USER CODE BEGIN TIM8_TRG_COM_TIM14_IRQn 0 */
+
+  /* USER CODE END TIM8_TRG_COM_TIM14_IRQn 0 */
+  HAL_TIM_IRQHandler(&htim8);
+  HAL_TIM_IRQHandler(&htim14);
+  /* USER CODE BEGIN TIM8_TRG_COM_TIM14_IRQn 1 */
+
+  /* USER CODE END TIM8_TRG_COM_TIM14_IRQn 1 */
+}
+
+/**
 * @brief This function handles UART4 global interrupt.
 */
 void UART4_IRQHandler(void)
@@ -234,9 +233,10 @@ void UART4_IRQHandler(void)
   /* USER CODE BEGIN UART4_IRQn 1 */
   if (huart4.Instance->SR & UART_FLAG_IDLE)           /* if Idle flag is set */
   {
-	  volatile uint32_t tmp;                  /* Must be volatile to prevent optimizations */
-	  tmp = huart4.Instance->SR;                       /* Read status register */
-	  tmp = huart4.Instance->DR;                       /* Read data register */
+	  /* FIXME: Para que estaba este tmp? */
+//	  volatile uint32_t tmp;                  /* Must be volatile to prevent optimizations */
+//	  tmp = huart4.Instance->SR;                       /* Read status register */
+//	  tmp = huart4.Instance->DR;                       /* Read data register */
 	  hdma_uart4_rx.Instance->CR &= ~DMA_SxCR_EN;       /* Disabling DMA will force transfer complete interrupt if enabled */
   }
 

@@ -164,25 +164,58 @@
 #define MPU9250_ADDRESS 0x68<<1  // Device address when ADO = 0
 #endif  
 
-// Set initial input parameters
-enum Ascale {
-  AFS_2G = 0,
-  AFS_4G,
-  AFS_8G,
-  AFS_16G
-};
 
-enum Gscale {
-  GFS_250DPS = 0,
-  GFS_500DPS,
-  GFS_1000DPS,
-  GFS_2000DPS
-};
+typedef struct MPU9250_params_t
+{
+	I2C_HandleTypeDef hi2c;				// I2C connected to MPU9250, eq, hi2c1.
 
-enum Mscale {
-  MFS_14BITS = 0, // 0.6 mG per LSB
-  MFS_16BITS      // 0.15 mG per LSB
-};
+	uint8_t accel_scale;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
+	uint8_t gyro_scale; 				// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+	uint8_t mag_scale; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
+	uint8_t mag_mode;       			// Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR
+
+	// scale resolutions per LSB for the sensors
+	float accel_res;
+	float gyro_res;
+	float mag_res;
+
+	float deltat;                			// integration interval for both filter schemes
+	float q[4];    						// vector to hold quaternion
+	float e_int[3];  						// vector to hold integral error for Mahony method
+
+	float beta; 							// compute beta
+
+} MPU9250_params;
+
+typedef struct accel_data_t
+{
+	float x;
+	float y;
+	float z;
+} accel_data;
+
+typedef struct gyro_data_t
+{
+	float x;
+	float y;
+	float z;
+} gyro_data;
+
+typedef struct mag_data_t
+{
+	float x;
+	float y;
+	float z;
+} mag_data;
+
+typedef struct MPU9250_data_t
+{
+	accel_data accel;
+	gyro_data gyro;
+	mag_data mag;
+	float temp;
+	float q[4];
+} MPU9250_data;
 
 
 #define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
@@ -192,81 +225,106 @@ enum Mscale {
 #define PI 		3.14159265358979323846f
 
 #ifdef __cplusplus
-class MPU9250
+
+class c_MPU9250
 {
- 
-    protected:
- 
+    private:
+		//Agregados cosa de que quede mas prolijo respecto a codigo original-----------------------------------
+
+		float m_accel_bias[3];
+		uint8_t m_accel_scale;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
+
+		float m_beta; 							// compute beta
+
+		float m_deltat;                			// integration interval for both filter schemes
+
+		float m_e_int[3];  						// vector to hold integral error for Mahony method
+
+		float m_gyro_bias[3];
+		uint8_t m_gyro_scale; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+
+		I2C_HandleTypeDef m_hi2c;
+
+		float m_mag_bias[3];
+		float m_mag_calibration[3];				// Factory mag calibration
+		uint8_t m_mag_mode;       				// Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR
+		uint8_t m_mag_scale; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
+
+		float m_q[4];    						// vector to hold quaternion
+
+		// Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
+		// of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
+		void f_calibrate_mpu9250(void);
+
+		float f_get_accel_res();
+		float f_get_gyro_res();
+		float f_get_mag_res();
+		uint8_t f_get_mag_mode(uint8_t);
+
+		void f_init_ak8963(void);
+		void f_init_mpu9250(void);
+
+		// Accelerometer and gyroscope self test; check calibration wrt factory settings
+		void f_mpu9250_self_test(float * destination); // Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass
+
+		/* TODO: Generalizar las funciones de read y write byte(s) */
+		uint8_t f_read_byte(uint8_t address, uint8_t subAddress);
+		void f_read_bytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
+
+		void f_reset_mpu9250(void);
+
+		void f_write_byte(uint8_t address, uint8_t subAddress, uint8_t data);
+
     public:
+		// Set initial input parameters
+		enum E_ACC_SCALE : uint8_t
+		{
+		  AFS_2G = 0,
+		  AFS_4G,
+		  AFS_8G,
+		  AFS_16G
+		};
 
-	//Agregados cosa de que quede mas prolijo respecto a codigo original-----------------------------------
-	I2C_HandleTypeDef hi2c;
+		enum E_GYRO_SCALE : uint8_t
+		{
+		  GFS_250DPS = 0,
+		  GFS_500DPS,
+		  GFS_1000DPS,
+		  GFS_2000DPS
+		};
 
-	uint8_t Ascale;     			// AFS_2G, AFS_4G, AFS_8G, AFS_16G
-	uint8_t Gscale; 				// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
-	uint8_t Mscale; 				// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
-	uint8_t Mmode;        			// Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR
-	float aRes, gRes, mRes;    		// scale resolutions per LSB for the sensors
+		enum E_MAG_SCALE : uint8_t
+		{
+		  MFS_14BITS = 0, 	// 0.6 mG per LSB
+		  MFS_16BITS      	// 0.15 mG per LSB
+		};
 
-	float deltat;                             		// integration interval for both filter schemes
-	float q[4];           							// vector to hold quaternion
-	float eInt[3];              					// vector to hold integral error for Mahony method
+		enum E_MAG_HZ : uint8_t
+		{
+		  MFREQ_8HZ = 0, 		// 8Hz Magnetometer data ODR
+		  MFREQ_100HZ   		// 100Hz Magnetometer data ODR
+		};
 
-	float beta;  									// compute beta
+		c_MPU9250();
+		/* TODO: Hacer un constructor adecuado para recibir parametros */
+		c_MPU9250(MPU9250_params);
+		~c_MPU9250();
 
-//===================================================================================================================
-//====== Set of useful function to access acceleration, gyroscope, and temperature data
-//===================================================================================================================
+		// Implementation of Sebastian Madgwick's "...efficient orientation filter for... inertial/magnetic sensor arrays"
+		// (see http://www.x-io.co.uk/category/open-source/ for examples and more details)
+		// which fuses acceleration, rotation rate, and magnetic moments to produce a quaternion-based estimate of absolute
+		// device orientation -- which can be converted to yaw, pitch, and roll. Useful for stabilizing quadcopters, etc.
+		// The performance of the orientation filter is at least as good as conventional Kalman-based filtering algorithms
+		// but is much less computationally intensive---it can be performed on a 3.3 V Pro Mini operating at 8 MHz!
+		void madgwick_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q);
+		// Similar to Madgwick scheme but uses proportional and integral filtering on the error between estimated reference vectors and
+		// measured ones.
+		void mahony_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q);
 
-    void writeByte(uint8_t address, uint8_t subAddress, uint8_t data);
-
-    uint8_t readByte(uint8_t address, uint8_t subAddress);
-
-    void readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
-
-    void getMres();
-
-
-	void getGres();
-
-	void getAres();
-
-	void readAccelData(int16_t * destination);
-
-	void readGyroData(int16_t * destination);
-
-	void readMagData(int16_t * destination);
-
-	int16_t readTempData();
-
-
-	void resetMPU9250();
-  
-	void initAK8963(float * destination);
-
-
-	void initMPU9250();
-
-	// Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
-	// of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
-	void calibrateMPU9250(float * dest1, float * dest2);
-
-
-	// Accelerometer and gyroscope self test; check calibration wrt factory settings
-	void MPU9250SelfTest(float * destination); // Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass
-
-
-
-	// Implementation of Sebastian Madgwick's "...efficient orientation filter for... inertial/magnetic sensor arrays"
-	// (see http://www.x-io.co.uk/category/open-source/ for examples and more details)
-	// which fuses acceleration, rotation rate, and magnetic moments to produce a quaternion-based estimate of absolute
-	// device orientation -- which can be converted to yaw, pitch, and roll. Useful for stabilizing quadcopters, etc.
-	// The performance of the orientation filter is at least as good as conventional Kalman-based filtering algorithms
-	// but is much less computationally intensive---it can be performed on a 3.3 V Pro Mini operating at 8 MHz!
-	void MadgwickQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz);
-	// Similar to Madgwick scheme but uses proportional and integral filtering on the error between estimated reference vectors and
-	// measured ones.
-	void MahonyQuaternionUpdate(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz);
+		void read_accel_data(accel_data &);
+		void read_gyro_data(gyro_data &);
+		void read_mag_data(mag_data &);
+		void read_temp_data(float &);
 };
 #endif
 #endif

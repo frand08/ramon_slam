@@ -52,15 +52,13 @@ class STM32Hardware {
     TIM_HandleTypeDef *htim;
     UART_HandleTypeDef *huart;
 
-//    const static uint16_t rbuflen = 128;
-    const static uint16_t rbuflen = 8192;
+    const static uint16_t rbuflen = 1024;
     uint8_t rbuf[rbuflen];
     uint32_t rind;
     //Se cambio en getRdmaInd() el CNDTR por el NDTR (respecto al original)
     inline uint32_t getRdmaInd(void){ return (rbuflen - huart->hdmarx->Instance->NDTR) & (rbuflen - 1); }
 
-//    const static uint16_t tbuflen = 256;
-    const static uint16_t tbuflen = 8192;
+    const static uint16_t tbuflen = 1024;
     uint8_t tbuf[tbuflen];
     uint32_t twind, tfind;
 

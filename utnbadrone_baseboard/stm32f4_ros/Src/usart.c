@@ -88,7 +88,7 @@ void MX_USART3_UART_Init(void)
 {
 
   huart3.Instance = USART3;
-  huart3.Init.BaudRate = 230400;
+  huart3.Init.BaudRate = 57600;
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
   huart3.Init.StopBits = UART_STOPBITS_1;
   huart3.Init.Parity = UART_PARITY_NONE;
@@ -207,7 +207,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     hdma_usart3_tx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
     hdma_usart3_tx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
     hdma_usart3_tx.Init.Mode = DMA_NORMAL;
-    hdma_usart3_tx.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_usart3_tx.Init.Priority = DMA_PRIORITY_HIGH;
     hdma_usart3_tx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
     if (HAL_DMA_Init(&hdma_usart3_tx) != HAL_OK)
     {
@@ -280,34 +280,6 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 } 
 
 /* USER CODE BEGIN 1 */
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-	/* FIXME: ver como hacer el flush() */
-	if(huart->Instance == USART3)
-		osMessagePut(PublishQueueHandle,2,osWaitForever);
-//	nh.getHardware()->flush();
-}
-
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-	// Si no esta esto, rbuflen overflow, que se traduce en:
-	// Lost sync with device, restarting...
-
-	/* FIXME: ver como hacer el reset_buf() */
-	if(huart->Instance == USART3)
-		osMessagePut(PublishQueueHandle,3,osWaitForever);
-//		nh.getHardware()->reset_rbuf();
-}
-
-void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart)
-{
-//	if(huart->Instance == USART3)
-//	{
-//		pingpongbuf = 1;
-//		uart3_status = 1;
-//	}
-}
 
 /* USER CODE END 1 */
 

@@ -42,7 +42,6 @@ c_MPU9250::c_MPU9250()
 //	float GyroMeasDrift = PI * (1.0f / 180.0f);      // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
 //	float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;  // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
 
-	uint8_t whoami = 0;
 	/* FIXME: Tomar tiempos del RTOS */
 //	lastUpdate = HAL_GetTick();
 	this->m_accel_scale = E_ACC_SCALE::AFS_16G;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
@@ -69,10 +68,26 @@ c_MPU9250::c_MPU9250()
 	this->m_mag_bias[0] = +470.;  // User environmental x-axis correction in milliGauss, should be automatically calculated
     this->m_mag_bias[1] = +120.;  // User environmental x-axis correction in milliGauss
     this->m_mag_bias[2] = +125.;  // User environmental x-axis correction in milliGauss
+}
+
+c_MPU9250::~c_MPU9250()
+{
+
+}
+
+
+bool c_MPU9250::init(void)
+{
+	uint8_t whoami = 0, count = 0;
+	bool ret = true;
 
 	// Read the WHO_AM_I register, this is a good test of communication
-	while(whoami != 0x71)
+	while(count < 10 || whoami != 0x71)
+	{
 		whoami = this->f_read_byte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+		count++;
+		HAL_Delay(1);
+	}
 
 	if (whoami == 0x71) // WHO_AM_I should always be 0x68
 	{
@@ -81,8 +96,8 @@ c_MPU9250::c_MPU9250()
 		this->f_reset_mpu9250(); // Reset registers to default in preparation for device calibration
 		this->f_calibrate_mpu9250(); // Calibrate gyro and accelerometers, load biases in bias registers
 
-//		mpu9250.writeByte(MPU9250_ADDRESS, FIFO_EN, 0x01111000);      // Enable FIFO: GYRO, ACCEL
-//		mpu9250.writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x00010000);   // Interrupt enable -> FIFO Overflow
+	//		mpu9250.writeByte(MPU9250_ADDRESS, FIFO_EN, 0x01111000);      // Enable FIFO: GYRO, ACCEL
+	//		mpu9250.writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x00010000);   // Interrupt enable -> FIFO Overflow
 
 		HAL_Delay(2);
 		this->f_init_mpu9250();
@@ -91,13 +106,9 @@ c_MPU9250::c_MPU9250()
 	}
 	else
 	{
-		while(1) ; // Loop forever if communication doesn't happen
+		ret = false;
 	}
-}
-
-c_MPU9250::~c_MPU9250()
-{
-
+	return ret;
 }
 
 // Implementation of Sebastian Madgwick's "...efficient orientation filter for... inertial/magnetic sensor arrays"
@@ -106,7 +117,7 @@ c_MPU9250::~c_MPU9250()
 // device orientation -- which can be converted to yaw, pitch, and roll. Useful for stabilizing quadcopters, etc.
 // The performance of the orientation filter is at least as good as conventional Kalman-based filtering algorithms
 // but is much less computationally intensive---it can be performed on a 3.3 V Pro Mini operating at 8 MHz!
-void c_MPU9250::madgwick_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q)
+void c_MPU9250::madgwick_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q, float deltat)
 {
 	float q1 = this->m_q[0], q2 = this->m_q[1], q3 = this->m_q[2], q4 = this->m_q[3];   // short name local variable for readability
 	float norm;
@@ -137,6 +148,8 @@ void c_MPU9250::madgwick_quaternion_update(float ax, float ay, float az, float g
 	float q3q3 = q3 * q3;
 	float q3q4 = q3 * q4;
 	float q4q4 = q4 * q4;
+
+	this->m_deltat = deltat;
 
 	// Normalise accelerometer measurement
 	norm = sqrt(ax * ax + ay * ay + az * az);
@@ -205,7 +218,7 @@ void c_MPU9250::madgwick_quaternion_update(float ax, float ay, float az, float g
 
 // Similar to Madgwick scheme but uses proportional and integral filtering on the error between estimated reference vectors and
 // measured ones.
-void c_MPU9250::mahony_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q)
+void c_MPU9250::mahony_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q, float deltat)
 {
 	float q1 = this->m_q[0], q2 = this->m_q[1], q3 = this->m_q[2], q4 = this->m_q[3];   // short name local variable for readability
 	float norm;
@@ -225,6 +238,9 @@ void c_MPU9250::mahony_quaternion_update(float ax, float ay, float az, float gx,
 	float q3q3 = q3 * q3;
 	float q3q4 = q3 * q4;
 	float q4q4 = q4 * q4;
+
+
+	this->m_deltat = deltat;
 
 	// Normalise accelerometer measurement
 	norm = sqrt(ax * ax + ay * ay + az * az);

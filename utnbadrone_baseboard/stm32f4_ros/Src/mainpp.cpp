@@ -12,7 +12,7 @@
 #include "gps.h"
 #include <string>
 //#include <nmea_msgs/Sentence.h>
-
+#include <sstream>
 
 #include "cmsis_os.h"
 
@@ -55,12 +55,14 @@ extern osThreadId MPU9250SendTaskHandle;
 extern osThreadId MPU9250TaskHandle;
 extern osThreadId GPSTaskHandle;
 
+
+/* Node creation */
+ros::NodeHandle nh;
+
 extern "C"
 {
 	void StartPublishTask(void const * argument)
 	{
-		/* Node creation */
-		ros::NodeHandle nh;
 
 		/* IMU publisher */
 		sensor_msgs::Imu imu;
@@ -70,30 +72,31 @@ extern "C"
 		sensor_msgs::NavSatFix gps;
 		ros::Publisher pub_gps("gps/fix",&gps);
 
+		/* Chatter publisher */
+		std_msgs::String chatter;
+		ros::Publisher pub_chatter("chatter",&chatter);
+
+		chatter.data = "Hola\r\n";
 		/* Movement subscriber */
 		ros::Subscriber<std_msgs::String> sub_movement("move", &movement_callback);
 
 		/* Definition of mpu9250_task */
 		const osThreadDef_t os_thread_def_mpu9250_task = \
-		{ (char*)"mpu9250_task", StartMPU9250Task, osPriorityNormal, 0, 128};
+		{ (char*)"mpu9250_task", StartMPU9250Task, osPriorityNormal, 0, 256};
 
 		/* Definition of gps_task */
 		const osThreadDef_t os_thread_def_gps_task = \
-		{ (char*)"mpu9250_task", StartGPSTask, osPriorityNormal, 0, 128};
+		{ (char*)"mpu9250_task", StartGPSTask, osPriorityNormal, 0, 256};
 
 		osEvent event;
 
-		/* FIXME: QUE SE YO, ASI NO ME TIRA EL WARNING DE QUE NO LO USO */
-		if(argument != NULL)
-		{
-			return;
-		}
 		nh.initNode();
 
 		nh.advertise(pub_imu);
-		nh.advertise(pub_gps);
+		nh.advertise(pub_chatter);
+//		nh.advertise(pub_gps);
 
-		nh.subscribe(sub_movement);
+//		nh.subscribe(sub_movement);
 
 		/* Creation of mpu9250_task */
 		MPU9250TaskHandle = osThreadCreate(&os_thread_def_mpu9250_task, (void*)&imu);
@@ -106,37 +109,71 @@ extern "C"
 		{
 			// Chequea si hubo evento (no lo espera). Si se encuentra conectado, transmite.
 			event = osMessageGet(PublishQueueHandle,0);
-			if(event.status == osEventMessage && nh.connected())
+			if(event.status == osEventMessage)
 			{
-				switch(event.value.v)
+				if(nh.connected())
 				{
-					/* IMU */
-					case 0:
-						imu.header.stamp = nh.now();
-						pub_imu.publish(&imu);
-						break;
-					/* GPS */
-					case 1:
-						gps.header.stamp = nh.now();
-						pub_gps.publish(&gps);
-						break;
-						/* FIXME: Ver si esta bien que se hagan aca los casos de UART */
-					/* UART TX CALLBACK */
-					case 2:
-						nh.getHardware()->flush();
-						break;
-					/* UART RX CALLBACK */
-					case 3:
-						nh.getHardware()->reset_rbuf();
-						break;
-					default:
-						break;
+//					pub_chatter.publish(&chatter);
+					switch(event.value.v)
+					{
+						/* IMU */
+						case 0:
+							imu.header.stamp = nh.now();
+							pub_imu.publish(&imu);
+							break;
+						/* GPS */
+						case 1:
+	//						gps.header.stamp = nh.now();
+	//						pub_gps.publish(&gps);
+							break;
+							/* FIXME: Ver si esta bien que se hagan aca los casos de UART */
+						/* UART TX CALLBACK */
+						case 2:
+							nh.getHardware()->flush();
+							break;
+						/* UART RX CALLBACK */
+						case 3:
+							nh.getHardware()->reset_rbuf();
+							break;
+						default:
+							break;
+					}
 				}
 			}
 			nh.spinOnce();
-			osDelay(1);
+			osDelay(10);
 		}
 	}
+
+	void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+	{
+		/* FIXME: ver como hacer el flush() */
+	//	if(huart->Instance == USART3)
+//			osMessagePut(PublishQueueHandle,2,osWaitForever);
+			nh.getHardware()->flush();
+	}
+
+
+	void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+	{
+		// Si no esta esto, rbuflen overflow, que se traduce en:
+		// Lost sync with device, restarting...
+
+		/* FIXME: ver como hacer el reset_buf() */
+		if(huart->Instance == USART3)
+//			osMessagePut(PublishQueueHandle,3,osWaitForever);
+			nh.getHardware()->reset_rbuf();
+	}
+
+	void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *huart)
+	{
+	//	if(huart->Instance == USART3)
+	//	{
+	//		pingpongbuf = 1;
+	//		uart3_status = 1;
+	//	}
+	}
+
 }
 
 
@@ -150,10 +187,12 @@ typedef struct IMU_Send_t
 void StartMPU9250SendTask(void const * argument)
 {
 	IMU_Send *imu_data = (IMU_Send *) argument;
-
+	portTickType LastWakeTime;
+	osDelay(1000);
+	LastWakeTime = osKernelSysTick();
 	for(;;)
 	{
-		osDelay(50);
+//		LastWakeTime = osKernelSysTick();
 		/* raw accel to m/s^2 */
 		imu_data->imu->linear_acceleration.x = imu_data->data.accel.x*GRAVITY;
 		imu_data->imu->linear_acceleration.y = imu_data->data.accel.y*GRAVITY;
@@ -171,8 +210,15 @@ void StartMPU9250SendTask(void const * argument)
 		imu_data->imu->orientation.y = imu_data->data.q[2];
 		imu_data->imu->orientation.z = imu_data->data.q[3];
 
+		osDelayUntil(&LastWakeTime,200);
+		HAL_GPIO_TogglePin(LD1_GPIO_Port,LD1_Pin);
+//		if(nh.connected())
+		{
+//			imu.header.stamp = nh.now();
+//			pub_imu.publish(&imu);
+		}
 		/* FIXME: Ver si osWaitForever es adecuado, ademas de cambiar arg */
-		osMessagePut(PublishQueueHandle,0,osWaitForever);
+		osMessagePut(PublishQueueHandle,0,0);
 	}
 }
 
@@ -182,13 +228,19 @@ void StartMPU9250Task(void const * argument)
 {
 	IMU_Send_t imu_send;
 	c_MPU9250 mpu9250;
-
+	uint32_t timer, first_time = 1;
 
 	const osThreadDef_t os_thread_def_mpu9250send_task = \
-	{ (char*)"mpu9250send_task", StartMPU9250SendTask, osPriorityNormal, 0, 128};
+	{ (char*)"mpu9250send_task", StartMPU9250SendTask, osPriorityNormal, 0, 256};
 
 	imu_send.imu = (sensor_msgs::Imu *) argument;
 	imu_send.imu->header.frame_id = "imu_data";
+
+	if(!mpu9250.init())
+	{
+		HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_SET);
+		osThreadTerminate(MPU9250TaskHandle);
+	}
 
 	//Covarianzas: Se toman solo las varianzas (xx,yy,zz), las covarianzas son despreciadas
 
@@ -231,13 +283,20 @@ void StartMPU9250Task(void const * argument)
 	imu_send.imu->orientation_covariance[6] = 0.0f;
 	imu_send.imu->orientation_covariance[7] = 0.0f;
 	imu_send.imu->orientation_covariance[8] = 0.15708f;
+//	imu_send.imu->header.stamp = nh.now();
 
 	MPU9250SendTaskHandle = osThreadCreate(&os_thread_def_mpu9250send_task, (void*)&imu_send);
 
 	for(;;)
 	{
-		if(osSemaphoreWait(MPUIntSemHandle,osWaitForever) > 0)
+		/* FIXME: Esta bien el == 0? */
+		if(osSemaphoreWait(MPUIntSemHandle,osWaitForever) == 0)
 		{
+			if(first_time)
+			{
+				timer = osKernelSysTick();
+				first_time = 0;
+			}
 			mpu9250.read_accel_data(imu_send.data.accel);  // Read the x/y/z adc values
 
 			mpu9250.read_gyro_data(imu_send.data.gyro);  // Read the x/y/z adc values
@@ -245,7 +304,6 @@ void StartMPU9250Task(void const * argument)
 			mpu9250.read_mag_data(imu_send.data.mag);  // Read the x/y/z adc values
 
 			mpu9250.read_temp_data(imu_send.data.temp);  // Read the adc values
-
 
 			/* FIXME: ver como tomar el deltat */
 			/*
@@ -259,11 +317,13 @@ void StartMPU9250Task(void const * argument)
 					imu_send.data.accel.x, imu_send.data.accel.y, imu_send.data.accel.z,
 					imu_send.data.gyro.x*PI/180.0f, imu_send.data.gyro.y*PI/180.0f, imu_send.data.gyro.z*PI/180.0f,
 					imu_send.data.mag.y,  imu_send.data.mag.x, imu_send.data.mag.z,
-					imu_send.data.q);
+					imu_send.data.q,
+					float(osKernelSysTick() - timer)/1000.0f);
+			timer = osKernelSysTick();
 		}
-		osDelay(1);
 	}
 }
+
 
 
 /**
@@ -543,7 +603,7 @@ void StartGPSTask(void const * argument)
 				osMessagePut(PublishQueueHandle,1,osWaitForever);
 			}
 		}
-		osDelay(1);
+		osDelay(100);
 	}
 }
 

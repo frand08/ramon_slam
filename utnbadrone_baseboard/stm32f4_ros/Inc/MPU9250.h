@@ -236,7 +236,7 @@ class c_MPU9250
 
 		float m_beta; 							// compute beta
 
-		float m_deltat;                			// integration interval for both filter schemes
+		float m_deltat;             			// integration interval for both filter schemes
 
 		float m_e_int[3];  						// vector to hold integral error for Mahony method
 
@@ -251,6 +251,7 @@ class c_MPU9250
 		uint8_t m_mag_scale; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
 
 		float m_q[4];    						// vector to hold quaternion
+
 
 		// Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
 		// of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
@@ -310,16 +311,19 @@ class c_MPU9250
 		c_MPU9250(MPU9250_params);
 		~c_MPU9250();
 
+		// Check for IMU status and initializes both chips
+		bool init(void);
+
 		// Implementation of Sebastian Madgwick's "...efficient orientation filter for... inertial/magnetic sensor arrays"
 		// (see http://www.x-io.co.uk/category/open-source/ for examples and more details)
 		// which fuses acceleration, rotation rate, and magnetic moments to produce a quaternion-based estimate of absolute
 		// device orientation -- which can be converted to yaw, pitch, and roll. Useful for stabilizing quadcopters, etc.
 		// The performance of the orientation filter is at least as good as conventional Kalman-based filtering algorithms
 		// but is much less computationally intensive---it can be performed on a 3.3 V Pro Mini operating at 8 MHz!
-		void madgwick_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q);
+		void madgwick_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q, float);
 		// Similar to Madgwick scheme but uses proportional and integral filtering on the error between estimated reference vectors and
 		// measured ones.
-		void mahony_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q);
+		void mahony_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q, float);
 
 		void read_accel_data(accel_data &);
 		void read_gyro_data(gyro_data &);

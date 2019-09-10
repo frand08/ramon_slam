@@ -108,7 +108,7 @@ extern "C"
 		for(;;)
 		{
 			// Chequea si hubo evento (no lo espera). Si se encuentra conectado, transmite.
-			event = osMessageGet(PublishQueueHandle,0);
+			event = osMessageGet(PublishQueueHandle,osWaitForever);
 			if(event.status == osEventMessage)
 			{
 				if(nh.connected())
@@ -141,7 +141,7 @@ extern "C"
 				}
 			}
 			nh.spinOnce();
-			osDelay(10);
+//			osDelay(10);
 		}
 	}
 
@@ -181,6 +181,7 @@ typedef struct IMU_Send_t
 {
 	sensor_msgs::Imu *imu;
 	MPU9250_data data;
+	int count;
 }IMU_Send;
 
 
@@ -192,31 +193,53 @@ void StartMPU9250SendTask(void const * argument)
 	LastWakeTime = osKernelSysTick();
 	for(;;)
 	{
-//		LastWakeTime = osKernelSysTick();
+		osDelayUntil(&LastWakeTime,100);
 		/* raw accel to m/s^2 */
-		imu_data->imu->linear_acceleration.x = imu_data->data.accel.x*GRAVITY;
-		imu_data->imu->linear_acceleration.y = imu_data->data.accel.y*GRAVITY;
-		imu_data->imu->linear_acceleration.z = imu_data->data.accel.z*GRAVITY;
+		if(imu_data->count<0)
+		{
+			imu_data->imu->linear_acceleration.x = imu_data->data.accel.x*GRAVITY;
+			imu_data->imu->linear_acceleration.y = imu_data->data.accel.y*GRAVITY;
+			imu_data->imu->linear_acceleration.z = imu_data->data.accel.z*GRAVITY;
 
-		/* raw angular velocity to rad/sec */
-		imu_data->imu->angular_velocity.x = imu_data->data.gyro.x*PI/180.0f;
-		imu_data->imu->angular_velocity.y = imu_data->data.gyro.y*PI/180.0f;
-		imu_data->imu->angular_velocity.z = imu_data->data.gyro.z*PI/180.0f;
+			/* raw angular velocity to rad/sec */
+			imu_data->imu->angular_velocity.x = imu_data->data.gyro.x*PI/180.0f;
+			imu_data->imu->angular_velocity.y = imu_data->data.gyro.y*PI/180.0f;
+			imu_data->imu->angular_velocity.z = imu_data->data.gyro.z*PI/180.0f;
+		}
+		else
+		{
+			imu_data->imu->linear_acceleration.x = imu_data->data.accel.x*GRAVITY/imu_data->count;
+			imu_data->imu->linear_acceleration.y = imu_data->data.accel.y*GRAVITY/imu_data->count;
+			imu_data->imu->linear_acceleration.z = imu_data->data.accel.z*GRAVITY/imu_data->count;
+
+			imu_data->data.accel.x = 0;
+			imu_data->data.accel.y = 0;
+			imu_data->data.accel.z = 0;
+
+			/* raw angular velocity to rad/sec */
+			imu_data->imu->angular_velocity.x = imu_data->data.gyro.x*PI/180.0f/imu_data->count;
+			imu_data->imu->angular_velocity.y = imu_data->data.gyro.y*PI/180.0f/imu_data->count;
+			imu_data->imu->angular_velocity.z = imu_data->data.gyro.z*PI/180.0f/imu_data->count;
+
+			imu_data->data.gyro.x = 0;
+			imu_data->data.gyro.y = 0;
+			imu_data->data.gyro.z = 0;
+
+			imu_data->count = 0;
+		}
+
+
 		//Ponemos la duracion total de lo realizado
 //		imu->header.stamp.nsec = sum;		//Lo hago al transmitir
+
 
 		imu_data->imu->orientation.w = imu_data->data.q[0];
 		imu_data->imu->orientation.x = imu_data->data.q[1];
 		imu_data->imu->orientation.y = imu_data->data.q[2];
 		imu_data->imu->orientation.z = imu_data->data.q[3];
 
-		osDelayUntil(&LastWakeTime,200);
 		HAL_GPIO_TogglePin(LD1_GPIO_Port,LD1_Pin);
-//		if(nh.connected())
-		{
-//			imu.header.stamp = nh.now();
-//			pub_imu.publish(&imu);
-		}
+
 		/* FIXME: Ver si osWaitForever es adecuado, ademas de cambiar arg */
 		osMessagePut(PublishQueueHandle,0,0);
 	}
@@ -229,10 +252,13 @@ void StartMPU9250Task(void const * argument)
 	IMU_Send_t imu_send;
 	c_MPU9250 mpu9250;
 	uint32_t timer, first_time = 1;
-
+	accel_data accel;
+	gyro_data gyro;
 	const osThreadDef_t os_thread_def_mpu9250send_task = \
 	{ (char*)"mpu9250send_task", StartMPU9250SendTask, osPriorityNormal, 0, 256};
 
+
+	imu_send.count = 0;			//Para indicar que no quiero promediar, -1, sino 0
 	imu_send.imu = (sensor_msgs::Imu *) argument;
 	imu_send.imu->header.frame_id = "imu_data";
 
@@ -297,9 +323,33 @@ void StartMPU9250Task(void const * argument)
 				timer = osKernelSysTick();
 				first_time = 0;
 			}
-			mpu9250.read_accel_data(imu_send.data.accel);  // Read the x/y/z adc values
+			// Esta en NED tomando ref del magnetometro
 
-			mpu9250.read_gyro_data(imu_send.data.gyro);  // Read the x/y/z adc values
+			mpu9250.read_accel_data(accel);  // Read the x/y/z adc values
+			mpu9250.read_gyro_data(gyro);  // Read the x/y/z adc values
+			if(imu_send.count<0)
+			{
+				imu_send.data.accel.x = accel.x;
+				imu_send.data.accel.y = accel.y;
+				imu_send.data.accel.z = accel.z;
+
+				imu_send.data.gyro.x = gyro.x;
+				imu_send.data.gyro.y = gyro.y;
+				imu_send.data.gyro.z = gyro.z;
+			}
+
+			else
+			{
+				imu_send.data.accel.x += accel.x;
+				imu_send.data.accel.y += accel.y;
+				imu_send.data.accel.z += accel.z;
+
+				imu_send.data.gyro.x += gyro.x;
+				imu_send.data.gyro.y += gyro.y;
+				imu_send.data.gyro.z += gyro.z;
+
+				imu_send.count++;
+			}
 
 			mpu9250.read_mag_data(imu_send.data.mag);  // Read the x/y/z adc values
 
@@ -314,8 +364,8 @@ void StartMPU9250Task(void const * argument)
 
 			//Calculo de quaternions
 			mpu9250.madgwick_quaternion_update(
-					imu_send.data.accel.x, imu_send.data.accel.y, imu_send.data.accel.z,
-					imu_send.data.gyro.x*PI/180.0f, imu_send.data.gyro.y*PI/180.0f, imu_send.data.gyro.z*PI/180.0f,
+					imu_send.data.accel.y, imu_send.data.accel.x, -imu_send.data.accel.z,
+					imu_send.data.gyro.y*PI/180.0f, imu_send.data.gyro.x*PI/180.0f, -imu_send.data.gyro.z*PI/180.0f,
 					imu_send.data.mag.y,  imu_send.data.mag.x, imu_send.data.mag.z,
 					imu_send.data.q,
 					float(osKernelSysTick() - timer)/1000.0f);

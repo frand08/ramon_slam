@@ -132,7 +132,6 @@ int main(void)
   HAL_TIM_IC_Start_IT(&htim8,TIM_CHANNEL_1);
   HAL_TIM_IC_Start_IT(&htim3,TIM_CHANNEL_2);
   HAL_TIM_Base_Start_IT(&htim6);
-//  setup();					// Inicializa nodos ROS y sensores
   HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,0);
 
   /* USER CODE END 2 */
@@ -159,7 +158,6 @@ int main(void)
 	  __HAL_TIM_SetCompare(&htim1,TIM_CHANNEL_3,210);
 	  __HAL_TIM_SetCompare(&htim1,TIM_CHANNEL_4,0);
 */
-//	  loop();				// Funcion en cpp para publicar
   }
   /* USER CODE END 3 */
 

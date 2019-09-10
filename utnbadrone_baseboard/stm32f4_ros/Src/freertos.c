@@ -56,21 +56,20 @@
 /* USER CODE END Includes */
 
 /* Variables -----------------------------------------------------------------*/
-osThreadId no_taskHandle;
 osThreadId publish_taskHandle;
 osMessageQId PublishQueueHandle;
 osSemaphoreId MPUIntSemHandle;
 osSemaphoreId GPSIntSemHandle;
 
 /* USER CODE BEGIN Variables */
-osThreadId MPU9250TaskHandle;
 osThreadId MPU9250SendTaskHandle;
+
+osThreadId MPU9250TaskHandle;
 osThreadId GPSTaskHandle;
 /* USER CODE END Variables */
 
 /* Function prototypes -------------------------------------------------------*/
-void StartNoTask(void const * argument);
-extern void StartPublishTask(void const * argument);
+void StartPublishTask(void const * argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -109,12 +108,8 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-  /* definition and creation of no_task */
-  osThreadDef(no_task, StartNoTask, osPriorityIdle, 0, 128);
-  no_taskHandle = osThreadCreate(osThread(no_task), NULL);
-
   /* definition and creation of publish_task */
-  osThreadDef(publish_task, StartPublishTask, osPriorityNormal, 0, 512);
+  osThreadDef(publish_task, StartPublishTask, osPriorityNormal, 0, 256);
   publish_taskHandle = osThreadCreate(osThread(publish_task), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -132,18 +127,17 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_QUEUES */
 }
 
-/* StartNoTask function */
-void StartNoTask(void const * argument)
+/* StartPublishTask function */
+__weak void StartPublishTask(void const * argument)
 {
 
-  /* USER CODE BEGIN StartNoTask */
+  /* USER CODE BEGIN StartPublishTask */
   /* Infinite loop */
   for(;;)
   {
-	  HAL_GPIO_TogglePin(LD0_GPIO_Port,LD0_Pin);
-    osDelay(1000);
+    osDelay(1);
   }
-  /* USER CODE END StartNoTask */
+  /* USER CODE END StartPublishTask */
 }
 
 /* USER CODE BEGIN Application */

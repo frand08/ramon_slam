@@ -55,7 +55,6 @@
 
 /* USER CODE BEGIN 0 */
 #include "cmsis_os.h"
-extern osMessageQId PublishQueueHandle;
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart4;

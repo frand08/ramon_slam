@@ -44,9 +44,9 @@ c_MPU9250::c_MPU9250()
 
 	/* FIXME: Tomar tiempos del RTOS */
 //	lastUpdate = HAL_GetTick();
-	this->m_accel_scale = E_ACC_SCALE::AFS_16G;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
-	this->m_gyro_scale = E_GYRO_SCALE::GFS_250DPS; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
-	this->m_mag_scale = E_MAG_SCALE::MFS_16BITS; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
+	this->m_accel_scale = c_MPU9250::E_ACC_SCALE::AFS_16G;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
+	this->m_gyro_scale = c_MPU9250::E_GYRO_SCALE::GFS_250DPS; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+	this->m_mag_scale = c_MPU9250::E_MAG_SCALE::MFS_16BITS; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
 
 	this->m_mag_mode = this->f_get_mag_mode(E_MAG_HZ::MFREQ_100HZ);        // Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR
 
@@ -325,9 +325,11 @@ void c_MPU9250::read_accel_data(accel_data &accel)
 	  data[0] = (int16_t)(((int16_t)rawData[0] << 8) | rawData[1]) ;  // Turn the MSB and LSB into a signed 16-bit value
 	  data[1] = (int16_t)(((int16_t)rawData[2] << 8) | rawData[3]) ;
 	  data[2] = (int16_t)(((int16_t)rawData[4] << 8) | rawData[5]) ;
-	  accel.x = (float)data[0]*this->f_get_accel_res() - this->m_accel_bias[0];  // get actual g value, this depends on scale being set
-	  accel.y = (float)data[1]*this->f_get_accel_res() - this->m_accel_bias[1];
-	  accel.z = (float)data[2]*this->f_get_accel_res() - this->m_accel_bias[2];
+
+	  // Para NED tengo que invertir x con y, ademas de negar z
+	  accel.x = (float)data[1]*this->f_get_accel_res();// - this->m_accel_bias[1];  // get actual g value, this depends on scale being set
+	  accel.y = (float)data[0]*this->f_get_accel_res();// - this->m_accel_bias[0];
+	  accel.z = -(float)data[2]*this->f_get_accel_res();// - this->m_accel_bias[2];
 }
 
 void c_MPU9250::read_gyro_data(gyro_data &gyro)
@@ -338,9 +340,11 @@ void c_MPU9250::read_gyro_data(gyro_data &gyro)
 	  data[0] = (int16_t)(((int16_t)rawData[0] << 8) | rawData[1]) ;  // Turn the MSB and LSB into a signed 16-bit value
 	  data[1] = (int16_t)(((int16_t)rawData[2] << 8) | rawData[3]) ;
 	  data[2] = (int16_t)(((int16_t)rawData[4] << 8) | rawData[5]) ;
-	  gyro.x = (float)data[0]*this->f_get_gyro_res() - this->m_gyro_bias[0];  // get actual gyro value, this depends on scale being set
-	  gyro.y = (float)data[1]*this->f_get_gyro_res() - this->m_gyro_bias[1];
-	  gyro.z = (float)data[2]*this->f_get_gyro_res() - this->m_gyro_bias[2];
+
+	  // Para NED tengo que invertir x con y, ademas de negar z
+	  gyro.x = (float)data[1]*this->f_get_gyro_res();// - this->m_gyro_bias[1];  // get actual gyro value, this depends on scale being set
+	  gyro.y = (float)data[0]*this->f_get_gyro_res();// - this->m_gyro_bias[0];
+	  gyro.z = -(float)data[2]*this->f_get_gyro_res();// - this->m_gyro_bias[2];
 }
 
 void c_MPU9250::read_mag_data(mag_data &mag)
@@ -357,9 +361,9 @@ void c_MPU9250::read_mag_data(mag_data &mag)
 				data[0] = (int16_t)(((int16_t)rawData[1] << 8) | rawData[0]);  // Turn the MSB and LSB into a signed 16-bit value
 				data[1] = (int16_t)(((int16_t)rawData[3] << 8) | rawData[2]) ;  // Data stored as little Endian
 				data[2] = (int16_t)(((int16_t)rawData[5] << 8) | rawData[4]) ;
-				mag.x = (float)data[0]*this->f_get_mag_res()*this->m_mag_calibration[0] - this->m_mag_bias[0];  // get actual magnetometer value, this depends on scale being set
-				mag.y = (float)data[1]*this->f_get_mag_res()*this->m_mag_calibration[1] - this->m_mag_bias[1];
-				mag.z = (float)data[2]*this->f_get_mag_res()*this->m_mag_calibration[2] - this->m_mag_bias[2];
+				mag.x = (float)data[0]*this->f_get_mag_res()*this->m_mag_calibration[0];// - this->m_mag_bias[0];  // get actual magnetometer value, this depends on scale being set
+				mag.y = (float)data[1]*this->f_get_mag_res()*this->m_mag_calibration[1];// - this->m_mag_bias[1];
+				mag.z = (float)data[2]*this->f_get_mag_res()*this->m_mag_calibration[2];// - this->m_mag_bias[2];
 
 			}
 	  }

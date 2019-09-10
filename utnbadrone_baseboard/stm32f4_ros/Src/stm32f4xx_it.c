@@ -121,42 +121,42 @@ void DMA1_Stream1_IRQHandler(void)
 void DMA1_Stream2_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream2_IRQn 0 */
-	uint32_t len = 0, tocopy = 0;
-	uint32_t Write = 0;
-	typedef struct
-	{
-	  __IO uint32_t ISR;   /*!< DMA interrupt status register */
-	  __IO uint32_t Reserved0;
-	  __IO uint32_t IFCR;  /*!< DMA interrupt flag clear register */
-	} DMA_Base_Registers;
+		uint32_t len = 0, tocopy = 0;
+		uint32_t Write = 0;
+		typedef struct
+		{
+		  __IO uint32_t ISR;   /*!< DMA interrupt status register */
+		  __IO uint32_t Reserved0;
+		  __IO uint32_t IFCR;  /*!< DMA interrupt flag clear register */
+		} DMA_Base_Registers;
 
-	/* FIXME: Para que estaba este regs? */
-//	DMA_Base_Registers *regs = (DMA_Base_Registers *)hdma_uart4_rx.StreamBaseAddress;
+		/* FIXME: Para que estaba este regs? */
+	//	DMA_Base_Registers *regs = (DMA_Base_Registers *)hdma_uart4_rx.StreamBaseAddress;
 
-	if(__HAL_DMA_GET_IT_SOURCE(&hdma_uart4_rx, DMA_IT_TC) != RESET)   // if the source is TC
-	{
-		/* Get the length of the data */
-		len = PINGPONG_SIZE - hdma_uart4_rx.Instance->NDTR;
+		if(__HAL_DMA_GET_IT_SOURCE(&hdma_uart4_rx, DMA_IT_TC) != RESET)   // if the source is TC
+		{
+			/* Get the length of the data */
+			len = PINGPONG_SIZE - hdma_uart4_rx.Instance->NDTR;
 
-		/* Get number of bytes we can copy to the end of buffer */
-		tocopy = PINGPONG_SIZE - Write;
+			/* Get number of bytes we can copy to the end of buffer */
+			tocopy = PINGPONG_SIZE - Write;
 
-		/* Check how many bytes to copy */
-		if (tocopy > len)
-			tocopy = len;
-		/* Write received data for UART main buffer for manipulation later */
-	   memcpy((void*)&databuf[Write],(const void*) buffer, tocopy);   /* Copy first part */
+			/* Check how many bytes to copy */
+			if (tocopy > len)
+				tocopy = len;
+			/* Write received data for UART main buffer for manipulation later */
+		   memcpy((void*)&databuf[Write],(const void*) buffer, tocopy);   /* Copy first part */
 
-	   /* EN REEMPLAZO */
-//	   gps_int_state = 1;
-	   osSemaphoreRelease(GPSIntSemHandle);
+		   /* EN REEMPLAZO */
+	//	   gps_int_state = 1;
+		   osSemaphoreRelease(GPSIntSemHandle);
 
-//	   regs->IFCR = 0x3FU << hdma_uart4_rx.StreamIndex; // clear all interrupts
-//	   hdma_uart4_rx.Instance->FCR = 0x3FU << hdma_uart4_rx.StreamIndex;
-	   hdma_uart4_rx.Instance->M0AR = (uint32_t)buffer;   /* Set memory address for DMA again */
-	   hdma_uart4_rx.Instance->NDTR = PINGPONG_SIZE;    /* Set number of bytes to receive */
-	   hdma_uart4_rx.Instance->CR |= DMA_SxCR_EN;            /* Start DMA transfer */
-	}
+	//	   regs->IFCR = 0x3FU << hdma_uart4_rx.StreamIndex; // clear all interrupts
+	//	   hdma_uart4_rx.Instance->FCR = 0x3FU << hdma_uart4_rx.StreamIndex;
+		   hdma_uart4_rx.Instance->M0AR = (uint32_t)buffer;   /* Set memory address for DMA again */
+		   hdma_uart4_rx.Instance->NDTR = PINGPONG_SIZE;    /* Set number of bytes to receive */
+		   hdma_uart4_rx.Instance->CR |= DMA_SxCR_EN;            /* Start DMA transfer */
+		}
   /* USER CODE END DMA1_Stream2_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_uart4_rx);
   /* USER CODE BEGIN DMA1_Stream2_IRQn 1 */

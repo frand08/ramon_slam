@@ -13,7 +13,7 @@
 #include "mle.h"
 
 // #define SEPARATE_POINTS         // Para solo tomar dos datos a una distancia de tiempo dado
-// #define REGEN_MAP               // Para que se regenere o no el mapa con cada nuevo set de datos
+#define REGEN_MAP               // Para que se regenere o no el mapa con cada nuevo set de datos
 // #define GET_RIGIDBODY_TRANSFORM // Para calcular la transformada entre el nuevo set y el mapa
 
 ros::Publisher map_pub;
@@ -210,6 +210,7 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
                 values_likelihood.push_back(get_likelihood(min_dist, 0, std_dev));
                 scan_likelihood += get_likelihood(min_dist, 0, std_dev);
 
+/*
                 // LS Fitting exponential:
                 // http://mathworld.wolfram.com/LeastSquaresFittingExponential.html
                 // a: en realidad es 0 para el caso
@@ -219,6 +220,7 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
                 a_sum += a[a.size()-1]; 
                 b_sum += b[b.size()-1];
                 x_ls += (y*(log(y) - b[b.size()-1]*x))*(y*(log(y) - b[b.size()-1]*x));
+*/
             }
 #endif
         }

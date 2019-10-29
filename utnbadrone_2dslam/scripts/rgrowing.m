@@ -17,28 +17,30 @@
 % ml     - slope of the line extracted
 % bl     - initial value of the line extracted
 
-function [points,ml,bl,i] = rgrowing(scans,max_range,min_range,S,Pmin,Lmin,e,d,j,i)
+function [Pb,Pf,ml,bl] = rgrowing(scans,max_range,min_range,Pmin,Lmin,e,d,j,i)
     laser_points = scans.Cartesian;
     angles = scans.Angles;
     Np = length(laser_points(:,1));
-
-    points = S(:,1);
     
     [ml,bl] = linesegment([laser_points(i:j,1) laser_points(i:j,2)]);
 
     Pf = j + 1;
     Pb = i - 1;
-            
-    tita = angles(Pf);
-    % Punto predecido k
-    yp = (ml*bl*cos(tita) / (sin(tita) - ml*cos(tita))) + bl;
-    xp = (bl*cos(tita)) / (sin(tita) - ml*cos(tita));    
     
-    if Pf <= Np && scans.Ranges(Pf) < max_range && scans.Ranges(Pf) > min_range
+    if Pf <= Np
+        tita = angles(Pf);
+        % Punto predecido k
+        yp = (ml*bl*cos(tita) / (sin(tita) - ml*cos(tita))) + bl;
+        xp = (bl*cos(tita)) / (sin(tita) - ml*cos(tita));
+    end
+    
+    if (Pf <= Np) && (scans.Ranges(Pf) < max_range) && ...
+            (scans.Ranges(Pf) > min_range)
+        
         while point2linedist(laser_points(Pf,:),ml,bl) < e && ...
-              point2pointdist(laser_points(Pf,:),[xp yp]) < e
+              point2pointdist(laser_points(Pf,:),[xp yp]) < d
 
-            [ml,bl] = linesegment([laser_points(i:Pf,1) laser_points(i:Pf,2)]);
+%             [ml,bl] = linesegment([laser_points(i:Pf,1) laser_points(i:Pf,2)]);
             Pf = Pf + 1;
             if Pf > Np || scans.Ranges(Pf) > max_range || ...
                scans.Ranges(Pf) < min_range
@@ -54,15 +56,18 @@ function [points,ml,bl,i] = rgrowing(scans,max_range,min_range,S,Pmin,Lmin,e,d,j
     Pf = Pf - 1;
     
 
-    tita = angles(Pb);
-    % Punto predecido k
-    yp = (ml*bl*cos(tita) / (sin(tita) - ml*cos(tita))) + bl;
-    xp = (bl*cos(tita)) / (sin(tita) - ml*cos(tita)); 
+    if Pb >= 1
+        tita = angles(Pb);
+        % Punto predecido k
+        yp = (ml*bl*cos(tita) / (sin(tita) - ml*cos(tita))) + bl;
+        xp = (bl*cos(tita)) / (sin(tita) - ml*cos(tita)); 
+    end
     
     if Pb >= 1 && scans.Ranges(Pb) < max_range && scans.Ranges(Pb) > min_range
         while point2linedist(laser_points(Pf,:),ml,bl) < e && ...
-              point2pointdist(laser_points(Pb,:),[xp yp]) < e
-            [ml,bl] = linesegment([laser_points(Pb:Pf,1) laser_points(Pb:Pf,2)]);
+              point2pointdist(laser_points(Pb,:),[xp yp]) < d
+            
+%             [ml,bl] = linesegment([laser_points(Pb:Pf,1) laser_points(Pb:Pf,2)]);
             Pb = Pb - 1;
             if Pb < 1 || scans.Ranges(Pb) > max_range || ...
                scans.Ranges(Pb) < min_range
@@ -85,9 +90,10 @@ function [points,ml,bl,i] = rgrowing(scans,max_range,min_range,S,Pmin,Lmin,e,d,j
     
     % Number of laser points contained in the line segment
     Pl = length(Pb:Pf); 
-    if Ll >= Lmin && Pl >= Pmin
-        % deberia devolver ml, bl y los puntos creo (i digamos)
-        points = double(laser_points(Pb:Pf,1));
-        i = Pf;
+
+    [ml,bl] = linesegment([laser_points(Pb:Pf,1) laser_points(Pb:Pf,2)]);
+    if Ll < Lmin && Pl < Pmin
+        % Para no considerarlo una recta
+        Pf = 0;
     end
 end

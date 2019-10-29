@@ -1,16 +1,19 @@
 % De Gao2018
-function [S,S2] = seed(scans,max_range,min_range,e,d,Snum,Pmin,Lmin)
+function S = seed(scans,max_range,min_range,e,d,Snum,Pmin,Lmin)
     laser_points = scans.Cartesian;
     angles = scans.Angles;
     Np = length(laser_points(:,1));
-    S = {};
+
+    S = LineSegmentClass;
     S2 = {};
+    
     flag = 1;
     cant = 0;
     i = 1;
     xp = zeros(Snum,1);
     yp = zeros(Snum,1);
-    while i < Np-Pmin
+    
+    while i < (Np-Pmin)
         j = i + Snum;
         [m,b] = linesegment([laser_points(i:j,1) laser_points(i:j,2)]);
         for k=i:1:j
@@ -37,18 +40,26 @@ function [S,S2] = seed(scans,max_range,min_range,e,d,Snum,Pmin,Lmin)
         end
     
         if flag == 1
-            Sa = [xp(:,1) (m*xp(:,1)+b)];
-            [points,ml,bl,ik] = rgrowing(scans,max_range,min_range,...
-                                        Sa,Pmin,Lmin,e,d,j,i);
-            cant = cant + 1;
-            S(cant,1) = {[points(:,1) (ml*points(:,1)+bl)]};
-            S2(cant,1) = {[laser_points(i:ik,1) laser_points(i:ik,2)]};
-            i = ik;
-%             cant = cant + 1;
-%             S(cant,1) = {[xp(:,1) (m*xp(:,1)+b)]};
-%             S2(cant,1) = {[laser_points(i:j,1) laser_points(i:j,2)]};
-%             i = i + Snum;
-        else        
+            [Pb,Pf,ml,bl] = rgrowing(scans,max_range,min_range,...
+                                     Pmin,Lmin,e,d,j,i);
+            if Pf > 0
+                tita = angles(Pb);
+                % Punto predecido k
+                xp_1 = (bl*cos(tita)) / (sin(tita) - ml*cos(tita));
+
+                tita = angles(Pf);
+                xp_2 = (bl*cos(tita)) / (sin(tita) - ml*cos(tita));
+                cant = cant + 1;
+                S(cant).x = [xp_1; xp_2];
+                S(cant).m = ml;
+                S(cant).b = bl;
+                S(cant).Pb = Pb;
+                S(cant).Pf = Pf;
+                S(cant).LaserPoints = [laser_points(Pb:Pf,1) 
+                                       laser_points(Pb:Pf,2)];
+                i = Pf;
+            end
+        else
             flag = 1;
         end
         i = i + 1;

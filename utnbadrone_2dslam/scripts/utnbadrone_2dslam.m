@@ -1,9 +1,36 @@
 %% Leo el bag
 clc;close all;clear;
-% bag = rosbag('_2019-10-14-10-38-58_pieza_fondo_1hz.bag');
-% bag = rosbag('_2019-10-15-15-19-10_pieza_fondo_1hz.bag');
-bag = rosbag('test3.bag');
-msgs_cell = readMessages(bag);      %% Obtengo todos los mensajes
+
+% test1.bag tiene:
+% -/f_scan: sensor_msgs/LaserScan
+% -/imu_data: sensor_msgs/Imu 
+
+% test2.bag tiene:
+% -/f_scan: sensor_msgs/LaserScan
+% -/imu_data: sensor_msgs/Imu 
+
+% test3.bag tiene:
+% -/horizontal_laser_2d: sensor_msgs/MultiEchoLaserScan
+% -/imu: sensor_msgs/Imu 
+
+% test4.bag tiene:
+% -/b_scan       105 msgs    : sensor_msgs/LaserScan             
+% -/clock       1067 msgs    : rosgraph_msgs/Clock               
+% -/f_scan       105 msgs    : sensor_msgs/LaserScan             
+% -/imu_data     416 msgs    : sensor_msgs/Imu                   
+% -/landmark      51 msgs    : cartographer_ros_msgs/LandmarkList
+% -/odom_enc     344 msgs    : nav_msgs/Odometry                 
+% -/rosout         8 msgs    : rosgraph_msgs/Log
+
+% test5.bag tiene:
+% topics:      /f_scan      132 msgs    : sensor_msgs/LaserScan
+%              /imu_data    519 msgs    : sensor_msgs/Imu      
+%              /odom_enc    427 msgs    : nav_msgs/Odometry    
+%              /tf          621 msgs    : tf2_msgs/TFMessage   
+%              /tf_static     1 msg     : tf2_msgs/TFMessage
+
+bag = rosbag('test5.bag');
+msgs_cell = readMessages(bag);          %% Obtengo todos los mensajes
 cant_msgs = length(msgs_cell);
 
 %% Lineal Kalman Filter (tomo pos x e y, vel x e y, y yaw)
@@ -24,7 +51,8 @@ ekf_update = false;
 H_k = [1 0 0 0 0; ...
        0 1 0 0 0; ...
        0 0 1 0 0; ...
-       0 0 0 1 0];
+       0 0 0 1 0 ...
+      ];
 
 % desvios estandar y varianzas de gyro y acc
 % REVISAR
@@ -42,16 +70,66 @@ var_accy = sigma_accy*sigma_accy;
 
 var_tita = sigma_tita*sigma_tita;
 
+
+% Rototraslaciones de la IMU
+
+imu_to_base_trans = bag.getTransform('base_link','imu_link');
+lidar_to_base_trans = bag.getTransform('base_link','front_laser_link');
+
+q_imu = [imu_to_base_trans.Transform.Rotation.W; ...
+         imu_to_base_trans.Transform.Rotation.X; ...
+         imu_to_base_trans.Transform.Rotation.Y; ...
+         imu_to_base_trans.Transform.Rotation.Z];
+
+pos_imu = [imu_to_base_trans.Transform.Translation.X; ...
+           imu_to_base_trans.Transform.Translation.Y; ...
+           imu_to_base_trans.Transform.Translation.Z]; 
+
+% Hallo rotation matrix c de la IMU     
+qw_imu = q_imu(1);
+qv_imu = q_imu(2:4);
+qv_x_imu = vec3subxoperator(qv_imu);
+     
+c_imu = (qw_imu*qw_imu-qv_imu'*qv_imu)*eye(3) + ...
+          2*(qv_imu*qv_imu') + 2*qw_imu*qv_x_imu;
+     
+[yaw_imu,roll_imu,pitch_imu] = quat2angle(q_imu');
+
+
+% Rototraslaciones del LIDAR
+       
+q_lidar = [lidar_to_base_trans.Transform.Rotation.W; ...
+           lidar_to_base_trans.Transform.Rotation.X; ...
+           lidar_to_base_trans.Transform.Rotation.Y; ...
+           lidar_to_base_trans.Transform.Rotation.Z];
+
+pos_lidar = [lidar_to_base_trans.Transform.Translation.X; ...
+             lidar_to_base_trans.Transform.Translation.Y; ...
+             lidar_to_base_trans.Transform.Translation.Z]; 
+
+% Hallo rotation matrix c del LIDAR
+qw_lidar = q_lidar(1);
+qv_lidar = q_lidar(2:4);
+qv_x_lidar = vec3subxoperator(qv_lidar);
+     
+c_lidar = (qw_lidar*qw_lidar-qv_lidar'*qv_lidar)*eye(3) + ...
+            2*(qv_lidar*qv_lidar') + 2*qw_lidar*qv_x_lidar;
+
+[yaw_lidar,roll_lidar,pitch_lidar] = quat2angle(q_lidar');
+
+
 % Necesito:
-% 1) Dato de IMU para conocer orientacion inicial e inicializar el ES-EKF
+% 1) Dato de IMU para conocer orientacion inicial e inicializar el KF
 init_correction = true;
 % 2) Dato de Lidar para inicializar la posicion
 init_update = true;
 % 3) Lo que venga
 
+%%
+
 while i <= cant_msgs
     % si me llego un dato de IMU
-    if strcmp(char(bag.MessageList.Topic(i)),'/imu')
+    if strcmp(char(msgs_cell{i}.MessageType),'sensor_msgs/Imu')
         % hacer la transformada (lidar orientation)
         imu_data = msgs_cell{i};
 
@@ -61,12 +139,18 @@ while i <= cant_msgs
              imu_data.Orientation.Y; ...
              imu_data.Orientation.Z];
         
-        accel = [imu_data.LinearAcceleration.X; ...
-                 imu_data.LinearAcceleration.Y];
+        acc = [imu_data.LinearAcceleration.X; ...
+               imu_data.LinearAcceleration.Y; ...
+               imu_data.LinearAcceleration.Z];
             
-        gyro = [imu_data.AngularVelocity.X; ...
-                imu_data.AngularVelocity.Y];
+        gyr = [imu_data.AngularVelocity.X; ...
+               imu_data.AngularVelocity.Y; ...
+               imu_data.AngularVelocity.Z];
         
+        % calculo la rotacion del giroscopio y acelerometro para tener una
+        % referencia respecto al body frame
+        accel = c_imu*acc;
+        gyro = c_imu*gyr;
         % obtengo los angulos de Euler
         [yaw,pitch,roll] = quat2angle(q');
 
@@ -76,7 +160,9 @@ while i <= cant_msgs
         
         % El - del accel es porque esta mal el signo de la grabacion, creo
         % (no tiene sentido que z sea positivo)
-        acc_data = -accel;
+        acc_data = -accel(1:2);
+        
+        gyro = gyro(1:2);
 
         % calculo la aceleracion quitando el efecto de la gravedad
         acc_nogravity = acc_data - g_rotated;
@@ -157,9 +243,10 @@ while i <= cant_msgs
         end
         time_prev = time_reg;        
     
-    % si me llego un dato de lidar Y YA TUVE UN DATO DE IMU!!...
-    elseif strcmp(char(bag.MessageList.Topic(i)),'/horizontal_laser_2d') ...
-           && init_correction == false
+    % si me llego un dato de lidar msgs_cellY YA TUVE UN DATO DE IMU!!...
+    elseif (strcmp(char(msgs_cell{i}.MessageType),'sensor_msgs/MultiEchoLaserScan') || ...
+           strcmp(char(msgs_cell{i}.MessageType),'sensor_msgs/LaserScan')) && ...
+           init_correction == false
     
         scan_data = msgs_cell{i};
 
@@ -167,24 +254,34 @@ while i <= cant_msgs
         min_range = scan_data.RangeMin;
         max_range = scan_data.RangeMax;
 
-        % cargo los datos de lidar en un vector
-        ranges = zeros(length(scan_data.Ranges),1);        
-        for j = 1:length(scan_data.Ranges)
-            % tienen mas de un dato a veces
-            scan_data_aux = scan_data.Ranges(j).Echoes(1);
-            ranges(j,1) = scan_data_aux;   
-        end
-        
         % cargo los angulos
         angles = scan_data.AngleMin: ...
                  scan_data.AngleIncrement: ... 
                  scan_data.AngleMax;
         
+        % cargo los datos de lidar en un vector
+        if strcmp(char(bag.MessageList.Topic(i)),'/horizontal_laser_2d')
+            ranges = zeros(length(scan_data.Ranges),1);        
+            for j = 1:length(scan_data.Ranges)
+                % tienen mas de un dato a veces
+                scan_data_aux = scan_data.Ranges(j).Echoes(1);
+                ranges(j,1) = scan_data_aux;   
+            end
+        elseif strcmp(char(bag.MessageList.Topic(i)),'/f_scan')
+            ranges = scan_data.Ranges;
+        end
+        
         % obtengo los datos a partir de los angulos y rangos
         lidar_data = lidarScan(ranges,angles);
 
+        % Primero realizo la rigid body transform de los datos del
+        % LIDAR
+        lidar_body = rotateandtranslate2d(lidar_data.Cartesian', ...
+                                          yaw_lidar,pos_lidar(1), ...
+                                          pos_lidar(2));
+        
         % extraigo contornos
-        lidar_data_reg = contourextraction(lidar_data, ...
+        lidar_data_reg = contourextraction(lidarScan(lidar_body'), ...
                                            Lmin, ...
                                            dist_threshold, ...
                                            min_range, ...
@@ -194,10 +291,12 @@ while i <= cant_msgs
             % orientacion            
             init_update = false;
 
+            % Roto los puntos con el yaw conseguido en el dato de IMU
             % calculo la transformacion de lo que me da el tita
-            lidar_data_trans_reg = lidarScan(rotateandtranslate2d( ...
-                                    lidar_data_reg.Cartesian', ...
-                                    yaw,0,0)');
+            lidar_data = rotateandtranslate2d(lidar_body, ...
+                                              yaw,0,0);
+                                          
+            lidar_data_trans_reg = lidarScan(lidar_data');
                                 
             map_scans{1,1} = lidar_data_trans_reg;
             map_poses = [0 0 yaw];
@@ -208,7 +307,8 @@ while i <= cant_msgs
         else
             % para calcular los deltat del scan
             time_scan_reg = scan_data.Header.Stamp.Nsec/1e9;
-            deltat_scan = time_scan_reg - time_scan_prev;
+%             deltat_scan = time_scan_reg - time_scan_prev;
+            deltat_scan = 0.25; % ARBITRARIO
             time_scan_prev = time_scan_reg;
             
             % obtengo las poses ultimas de x e y solamente
@@ -217,7 +317,7 @@ while i <= cant_msgs
             
             % realizo la fuerza bruta para encontrar el que mejor matchee
             [data,x,y] = bruteforcesearch(map, ...
-                                          lidar_data_reg, ...
+                                          lidar_data_reg.Cartesian', ...
                                           pos_k(1), ...
                                           pos_k(2), ...
                                           tita_k, ...
@@ -233,13 +333,15 @@ while i <= cant_msgs
             y_k = [x; ...
                    y; ...
                    vel_x; ...
-                   vel_y];
-            
+                   vel_y ...
+                  ];
+               
             % A) Computamos la Ganancia de Kalman            
             
-            % Matriz R de Kalman
+            % Matriz R de Kalmanmsgmsgs_cells_cell
             % REVISAR
             R = eye(4)*deltat_scan*var_lidar;
+%             R = eye(2)*deltat_scan*var_lidar;
 
             K_k = P_k*H_k'*(H_k*P_k*H_k'+ R)^(-1);
 

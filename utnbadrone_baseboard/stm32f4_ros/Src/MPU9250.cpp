@@ -30,11 +30,14 @@
 #include <sensor_msgs/Imu.h>
 #include <math.h>
 #include "cmsis_os.h"
-extern I2C_HandleTypeDef hi2c1;
 
 
+/* PUBLIC FUNCTIONS */
 
-c_MPU9250::c_MPU9250()
+
+c_MPU9250::c_MPU9250(void(*delay_func_ptr)(uint32_t),
+					 void(*read_func_ptr)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data),
+					 void(*write_func_ptr)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data))
 {
 	// parameters for 6 DoF sensor fusion calculations
 	/* FIXME: GyroMeasError y todos los otros? que onda? */
@@ -46,11 +49,11 @@ c_MPU9250::c_MPU9250()
 //	lastUpdate = HAL_GetTick();
 	this->m_accel_scale = c_MPU9250::E_ACC_SCALE::AFS_16G;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
 	this->m_gyro_scale = c_MPU9250::E_GYRO_SCALE::GFS_250DPS; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+
 	this->m_mag_scale = c_MPU9250::E_MAG_SCALE::MFS_16BITS; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
+	this->m_mag_mode = this->f_get_mag_mode(E_MAG_HZ::MFREQ_100HZ);        // Either 8 Hz (0x02) or 100 Hz (0x06) magnetometer data ODR
 
-	this->m_mag_mode = this->f_get_mag_mode(E_MAG_HZ::MFREQ_100HZ);        // Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR
-
-	this->m_hi2c = hi2c1;
+//	this->m_hi2c = hi2c1;
 
 	this->m_deltat = 0.0f;                             // integration interval for both filter schemes
 
@@ -68,6 +71,10 @@ c_MPU9250::c_MPU9250()
 	this->m_mag_bias[0] = +470.;  // User environmental x-axis correction in milliGauss, should be automatically calculated
     this->m_mag_bias[1] = +120.;  // User environmental x-axis correction in milliGauss
     this->m_mag_bias[2] = +125.;  // User environmental x-axis correction in milliGauss
+
+    this->f_delay_ms = delay_func_ptr;
+    this->f_read_bytes = read_func_ptr;
+    this->f_write_bytes = write_func_ptr;
 }
 
 c_MPU9250::~c_MPU9250()
@@ -82,16 +89,18 @@ bool c_MPU9250::init(void)
 	bool ret = true;
 
 	// Read the WHO_AM_I register, this is a good test of communication
-	while(count < 10 || whoami != 0x71)
+	while(count < 10 && whoami != 0x71)
 	{
-		whoami = this->f_read_byte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+		this->f_read_bytes(MPU9250_ADDRESS, WHO_AM_I_MPU9250,1,&whoami);  // Read WHO_AM_I register for MPU-9250
 		count++;
-		HAL_Delay(1);
+		this->f_delay_ms(1);
 	}
+
+	count = 0;
 
 	if (whoami == 0x71) // WHO_AM_I should always be 0x68
 	{
-		HAL_Delay(1);
+		this->f_delay_ms(1);
 
 		this->f_reset_mpu9250(); // Reset registers to default in preparation for device calibration
 		this->f_calibrate_mpu9250(); // Calibrate gyro and accelerometers, load biases in bias registers
@@ -99,10 +108,10 @@ bool c_MPU9250::init(void)
 	//		mpu9250.writeByte(MPU9250_ADDRESS, FIFO_EN, 0x01111000);      // Enable FIFO: GYRO, ACCEL
 	//		mpu9250.writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x00010000);   // Interrupt enable -> FIFO Overflow
 
-		HAL_Delay(2);
+		this->f_delay_ms(2);
 		this->f_init_mpu9250();
 		this->f_init_ak8963();
-		HAL_Delay(2);
+		this->f_delay_ms(2);
 	}
 	else
 	{
@@ -352,19 +361,19 @@ void c_MPU9250::read_mag_data(mag_data &mag)
 	  uint8_t rawData[7];  // x/y/z gyro register data, ST2 register stored here, must read ST2 at end of data acquisition
 	  uint8_t c;
 	  uint16_t data[3];
-	  if(this->f_read_byte(AK8963_ADDRESS, AK8963_ST1) & 0x01)  // wait for magnetometer data ready bit to be set
+	  this->f_read_bytes(AK8963_ADDRESS, AK8963_ST1,1,&c);
+	  if(c & 0x01)  // wait for magnetometer data ready bit to be set
 	  {
 		  this->f_read_bytes(AK8963_ADDRESS, AK8963_XOUT_L, 7, &rawData[0]);  // Read the six raw data and ST2 registers sequentially into data array
 		  c = rawData[6]; // End data read by reading ST2 register
 			if(!(c & 0x08)) // Check if magnetic sensor overflow set, if not then report data
 			{
-				data[0] = (int16_t)(((int16_t)rawData[1] << 8) | rawData[0]);  // Turn the MSB and LSB into a signed 16-bit value
+				data[0] = (int16_t)(((int16_t)rawData[1] << 8) | rawData[0]) ;  // Turn the MSB and LSB into a signed 16-bit value
 				data[1] = (int16_t)(((int16_t)rawData[3] << 8) | rawData[2]) ;  // Data stored as little Endian
 				data[2] = (int16_t)(((int16_t)rawData[5] << 8) | rawData[4]) ;
-				mag.x = (float)data[0]*this->f_get_mag_res()*this->m_mag_calibration[0];// - this->m_mag_bias[0];  // get actual magnetometer value, this depends on scale being set
-				mag.y = (float)data[1]*this->f_get_mag_res()*this->m_mag_calibration[1];// - this->m_mag_bias[1];
-				mag.z = (float)data[2]*this->f_get_mag_res()*this->m_mag_calibration[2];// - this->m_mag_bias[2];
-
+				mag.x = (float)data[0]*this->f_get_mag_res()*this->m_mag_calibration[0] - this->m_mag_bias[0];  // get actual magnetometer value, this depends on scale being set
+				mag.y = (float)data[1]*this->f_get_mag_res()*this->m_mag_calibration[1] - this->m_mag_bias[1];
+				mag.z = (float)data[2]*this->f_get_mag_res()*this->m_mag_calibration[2] - this->m_mag_bias[2];
 			}
 	  }
 }
@@ -379,247 +388,62 @@ void c_MPU9250::read_temp_data(float &temp)
 
 }
 
+/* PRIVATE FUNCTIONS */
 
-uint8_t c_MPU9250::f_read_byte(uint8_t address, uint8_t subAddress)
-{
-	uint8_t data; // `data` will store the register data
-	HAL_I2C_Mem_Read(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data,1,100);
-	return data;
-}
-
-void c_MPU9250::f_read_bytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)
-{
-	HAL_I2C_Mem_Read(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&dest[0],count,100);
-}
-
-void c_MPU9250::f_write_byte(uint8_t address, uint8_t subAddress, uint8_t data)
-{
-	HAL_I2C_Mem_Write(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data,1,100);
-}
-
-
-float c_MPU9250::f_get_accel_res()
-{
-	float accel_res;
-	switch (this->m_accel_scale)
-	{
-		// Possible accelerometer scales (and their register bit settings) are:
-		// 2 Gs (00), 4 Gs (01), 8 Gs (10), and 16 Gs  (11).
-			// Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
-		case E_ACC_SCALE::AFS_2G:
-			accel_res = 2.0/32768.0;
-			break;
-		case E_ACC_SCALE::AFS_4G:
-			accel_res = 4.0/32768.0;
-			break;
-		case E_ACC_SCALE::AFS_8G:
-			accel_res = 8.0/32768.0;
-			break;
-		case E_ACC_SCALE::AFS_16G:
-			accel_res = 16.0/32768.0;
-			break;
-		default:
-			accel_res = 2.0/32768.0;
-			break;
-	}
-	return accel_res;
-}
-
-float c_MPU9250::f_get_gyro_res()
-{
-	float gyro_res;
-	switch (this->m_gyro_scale)
-	{
-		// Possible gyro scales (and their register bit settings) are:
-		// 250 DPS (00), 500 DPS (01), 1000 DPS (10), and 2000 DPS  (11).
-			// Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
-		case E_GYRO_SCALE::GFS_250DPS:
-			gyro_res = 250.0/32768.0;
-			break;
-		case E_GYRO_SCALE::GFS_500DPS:
-			gyro_res = 500.0/32768.0;
-			break;
-		case E_GYRO_SCALE::GFS_1000DPS:
-			gyro_res = 1000.0/32768.0;
-			break;
-		case E_GYRO_SCALE::GFS_2000DPS:
-			gyro_res = 2000.0/32768.0;
-			break;
-		default:
-			gyro_res = 250.0/32768.0;
-			break;
-	}
-	return gyro_res;
-}
-
-
-uint8_t c_MPU9250::f_get_mag_mode(uint8_t mag_hz)
-{
-	float mag_mode;
-	switch (mag_hz)
-	{
-		case E_MAG_HZ::MFREQ_8HZ:
-			mag_mode = 0x02;
-			break;
-		case E_MAG_HZ::MFREQ_100HZ:
-			mag_mode = 0x06;
-			break;
-		default:
-			mag_mode = 0x06;
-			break;
-	}
-	return mag_mode;
-}
-
-float c_MPU9250::f_get_mag_res()
-{
-	float mag_res;
-	switch (this->m_mag_scale)
-	{
-		// Possible magnetometer scales (and their register bit settings) are:
-		// 14 bit resolution (0) and 16 bit resolution (1)
-		case E_MAG_SCALE::MFS_14BITS:
-			mag_res = 10.0*4912.0/8190.0; // Proper scale to return milliGauss
-			break;
-		case E_MAG_SCALE::MFS_16BITS:
-			mag_res = 10.0*4912.0/32760.0; // Proper scale to return milliGauss
-			break;
-		default:
-			mag_res = 10.0*4912.0/8190.0; // Proper scale to return milliGauss
-			break;
-	}
-	return mag_res;
-}
-
-
-void c_MPU9250::f_reset_mpu9250(void)
-{
-	  // reset device
-	  this->f_write_byte(MPU9250_ADDRESS, PWR_MGMT_1, 0x80); // Write a one to bit 7 reset bit; toggle reset device
-	  HAL_Delay(100);
-}
-
-void c_MPU9250::f_init_ak8963(void)
-{
-	  // First extract the factory calibration for each magnetometer axis
-	  uint8_t rawData[3];  // x/y/z gyro calibration data stored here
-
-	  this->f_write_byte(AK8963_ADDRESS, AK8963_CNTL, 0x00); // Power down magnetometer
-	  HAL_Delay(10);
-	  this->f_write_byte(AK8963_ADDRESS, AK8963_CNTL, 0x0F); // Enter Fuse ROM access mode
-	  HAL_Delay(10);
-	  this->f_read_bytes(AK8963_ADDRESS, AK8963_ASAX, 3, &rawData[0]);  // Read the x-, y-, and z-axis calibration values
-	  this->m_mag_calibration[0] =  (float)(rawData[0] - 128)/256.0f + 1.0f;   // Return x-axis sensitivity adjustment values, etc.
-	  this->m_mag_calibration[1] =  (float)(rawData[1] - 128)/256.0f + 1.0f;
-	  this->m_mag_calibration[2] =  (float)(rawData[2] - 128)/256.0f + 1.0f;
-	  this->f_write_byte(AK8963_ADDRESS, AK8963_CNTL, 0x00); // Power down magnetometer
-	  HAL_Delay(10);
-	  // Configure the magnetometer for continuous read and highest resolution
-	  // set Mscale bit 4 to 1 (0) to enable 16 (14) bit resolution in CNTL register,
-	  // and enable continuous mode data acquisition Mmode (bits [3:0]), 0010 for 8 Hz and 0110 for 100 Hz sample rates
-	  this->f_write_byte(AK8963_ADDRESS, AK8963_CNTL, this->m_mag_scale << 4 | this->m_mag_mode); // Set magnetometer data resolution and sample ODR
-	  HAL_Delay(10);
-}
-
-
-void c_MPU9250::f_init_mpu9250()
-{
-	 // Initialize MPU9250 device
-	 // wake up device
-	  this->f_write_byte(MPU9250_ADDRESS, PWR_MGMT_1, 0x00); // Clear sleep mode bit (6), enable all sensors
-	  HAL_Delay(100); // Delay 100 ms for PLL to get established on x-axis gyro; should check for PLL ready interrupt
-
-	 // get stable time source
-	  this->f_write_byte(MPU9250_ADDRESS, PWR_MGMT_1, 0x01);  // Set clock source to be PLL with x-axis gyroscope reference, bits 2:0 = 001
-
-	 // Configure Gyro and Accelerometer
-	 // Disable FSYNC and set accelerometer and gyro bandwidth to 44 and 42 Hz, respectively;
-	 // DLPF_CFG = bits 2:0 = 010; this sets the sample rate at 1 kHz for both
-	 // Maximum delay is 4.9 ms which is just over a 200 Hz maximum rate
-	  this->f_write_byte(MPU9250_ADDRESS, CONFIG, 0x03);
-
-	 // Set sample rate = gyroscope output rate/(1 + SMPLRT_DIV)
-	  this->f_write_byte(MPU9250_ADDRESS, SMPLRT_DIV, 0x04);  // Use a 200 Hz rate; the same rate set in CONFIG above
-
-	 // Set gyroscope full scale range
-	 // Range selects FS_SEL and AFS_SEL are 0 - 3, so 2-bit values are left-shifted into positions 4:3
-	  uint8_t c = this->f_read_byte(MPU9250_ADDRESS, GYRO_CONFIG); // get current GYRO_CONFIG register value
-	 // c = c & ~0xE0; // Clear self-test bits [7:5]
-	  c = c & ~0x02; // Clear Fchoice bits [1:0]
-	  c = c & ~0x18; // Clear AFS bits [4:3]
-	  c = c | this->m_gyro_scale << 3; // Set full scale range for the gyro
-	 // c =| 0x00; // Set Fchoice for the gyro to 11 by writing its inverse to bits 1:0 of GYRO_CONFIG
-	  this->f_write_byte(MPU9250_ADDRESS, GYRO_CONFIG, c ); // Write new GYRO_CONFIG value to register
-
-	 // Set accelerometer full-scale range configuration
-	  c = this->f_read_byte(MPU9250_ADDRESS, ACCEL_CONFIG); // get current ACCEL_CONFIG register value
-	 // c = c & ~0xE0; // Clear self-test bits [7:5]
-	  c = c & ~0x18;  // Clear AFS bits [4:3]
-	  c = c | this->m_accel_scale << 3; // Set full scale range for the accelerometer
-	  this->f_write_byte(MPU9250_ADDRESS, ACCEL_CONFIG, c); // Write new ACCEL_CONFIG register value
-
-	 // Set accelerometer sample rate configuration
-	 // It is possible to get a 4 kHz sample rate from the accelerometer by choosing 1 for
-	 // accel_fchoice_b bit [3]; in this case the bandwidth is 1.13 kHz
-	  c = this->f_read_byte(MPU9250_ADDRESS, ACCEL_CONFIG2); // get current ACCEL_CONFIG2 register value
-	  c = c & ~0x0F; // Clear accel_fchoice_b (bit 3) and A_DLPFG (bits [2:0])
-	  c = c | 0x03;  // Set accelerometer rate to 1 kHz and bandwidth to 41 Hz
-	  this->f_write_byte(MPU9250_ADDRESS, ACCEL_CONFIG2, c); // Write new ACCEL_CONFIG2 register value
-
-	 // The accelerometer, gyro, and thermometer are set to 1 kHz sample rates,
-	 // but all these rates are further reduced by a factor of 5 to 200 Hz because of the SMPLRT_DIV setting
-
-	  // Configure Interrupts and Bypass Enable
-	  // Set interrupt pin active high, push-pull, and clear on read of INT_STATUS, enable I2C_BYPASS_EN so additional chips
-	  // can join the I2C bus and all can be controlled by the Arduino as master
-//	   writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x22);
-	   this->f_write_byte(MPU9250_ADDRESS, INT_PIN_CFG, 0x00);
-	   this->f_write_byte(MPU9250_ADDRESS, INT_ENABLE, 0x01);  // Enable data ready (bit 0) interrupt
-}
 
 // Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
 // of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
 void c_MPU9250::f_calibrate_mpu9250(void)
 {
 	uint8_t data[12]; // data array to hold accelerometer and gyro x, y, z, data
+	uint8_t data_aux;	// Para escribir en el I2C
 	uint16_t ii, packet_count, fifo_count;
 	int32_t gyro_bias[3] = {0, 0, 0}, accel_bias[3] = {0, 0, 0};
 
 	// reset device, reset all registers, clear gyro and accelerometer bias registers
-	this->f_write_byte(MPU9250_ADDRESS, PWR_MGMT_1, 0x80); // Write a one to bit 7 reset bit; toggle reset device
-	HAL_Delay(100);
+	data_aux = 0x80;
+	this->f_write_bytes(MPU9250_ADDRESS, PWR_MGMT_1, 1, &data_aux); // Write a one to bit 7 reset bit; toggle reset device
+	this->f_delay_ms(100);
 
 	// get stable time source
 	// Set clock source to be PLL with x-axis gyroscope reference, bits 2:0 = 001
-	this->f_write_byte(MPU9250_ADDRESS, PWR_MGMT_1, 0x01);
-	this->f_write_byte(MPU9250_ADDRESS, PWR_MGMT_2, 0x00);
-	HAL_Delay(200);
+	data_aux = 0x01;
+	this->f_write_bytes(MPU9250_ADDRESS, PWR_MGMT_1, 1, &data_aux);
+	data_aux = 0x00;
+	this->f_write_bytes(MPU9250_ADDRESS, PWR_MGMT_2, 1, &data_aux);
+	this->f_delay_ms(200);
 
 	// Configure device for bias calculation
-	this->f_write_byte(MPU9250_ADDRESS, INT_ENABLE, 0x00);   // Disable all interrupts
-	this->f_write_byte(MPU9250_ADDRESS, FIFO_EN, 0x00);      // Disable FIFO
-	this->f_write_byte(MPU9250_ADDRESS, PWR_MGMT_1, 0x00);   // Turn on internal clock source
-	this->f_write_byte(MPU9250_ADDRESS, I2C_MST_CTRL, 0x00); // Disable I2C master
-	this->f_write_byte(MPU9250_ADDRESS, USER_CTRL, 0x00);    // Disable FIFO and I2C master modes
-	this->f_write_byte(MPU9250_ADDRESS, USER_CTRL, 0x0C);    // Reset FIFO and DMP
-	HAL_Delay(15);
+	this->f_write_bytes(MPU9250_ADDRESS, INT_ENABLE, 1, &data_aux);   // Disable all interrupts
+	this->f_write_bytes(MPU9250_ADDRESS, FIFO_EN, 1, &data_aux);      // Disable FIFO
+	this->f_write_bytes(MPU9250_ADDRESS, PWR_MGMT_1, 1, &data_aux);   // Turn on internal clock source
+	this->f_write_bytes(MPU9250_ADDRESS, I2C_MST_CTRL, 1, &data_aux); // Disable I2C master
+	this->f_write_bytes(MPU9250_ADDRESS, USER_CTRL, 1, &data_aux);    // Disable FIFO and I2C master modes
+	data_aux = 0x0C;
+	this->f_write_bytes(MPU9250_ADDRESS, USER_CTRL, 1, &data_aux);    // Reset FIFO and DMP
+	this->f_delay_ms(15);
 
 	// Configure MPU9250 gyro and accelerometer for bias calculation
-	this->f_write_byte(MPU9250_ADDRESS, CONFIG, 0x01);      // Set low-pass filter to 188 Hz
-	this->f_write_byte(MPU9250_ADDRESS, SMPLRT_DIV, 0x00);  // Set sample rate to 1 kHz
-	this->f_write_byte(MPU9250_ADDRESS, GYRO_CONFIG, 0x00);  // Set gyro full-scale to 250 degrees per second, maximum sensitivity
-	this->f_write_byte(MPU9250_ADDRESS, ACCEL_CONFIG, 0x00); // Set accelerometer full-scale to 2 g, maximum sensitivity
+	data_aux = 0x01;
+	this->f_write_bytes(MPU9250_ADDRESS, CONFIG, 1, &data_aux);      // Set low-pass filter to 188 Hz
+	data_aux = 0x00;
+	this->f_write_bytes(MPU9250_ADDRESS, SMPLRT_DIV, 1, &data_aux);  // Set sample rate to 1 kHz
+	this->f_write_bytes(MPU9250_ADDRESS, GYRO_CONFIG, 1, &data_aux);  // Set gyro full-scale to 250 degrees per second, maximum sensitivity
+	this->f_write_bytes(MPU9250_ADDRESS, ACCEL_CONFIG, 1, &data_aux); // Set accelerometer full-scale to 2 g, maximum sensitivity
 
 	uint16_t  gyrosensitivity  = 131;   // = 131 LSB/degrees/sec
 	uint16_t  accelsensitivity = 16384;  // = 16384 LSB/g
 
 	// Configure FIFO to capture accelerometer and gyro data for bias calculation
-	this->f_write_byte(MPU9250_ADDRESS, USER_CTRL, 0x40);   // Enable FIFO
-	this->f_write_byte(MPU9250_ADDRESS, FIFO_EN, 0x78);     // Enable gyro and accelerometer sensors for FIFO (max size 512 bytes in MPU-9250)
-	HAL_Delay(40); // accumulate 40 samples in 80 milliseconds = 480 bytes
+	data_aux = 0x40;
+	this->f_write_bytes(MPU9250_ADDRESS, USER_CTRL, 1, &data_aux);   // Enable FIFO
+	data_aux = 0x78;
+	this->f_write_bytes(MPU9250_ADDRESS, FIFO_EN, 1, &data_aux);     // Enable gyro and accelerometer sensors for FIFO (max size 512 bytes in MPU-9250)
+	this->f_delay_ms(40); // accumulate 40 samples in 80 milliseconds = 480 bytes
 
 	// At end of sample accumulation, turn off FIFO sensor read
-	this->f_write_byte(MPU9250_ADDRESS, FIFO_EN, 0x00);        // Disable gyro and accelerometer sensors for FIFO
+	data_aux = 0x00;
+	this->f_write_bytes(MPU9250_ADDRESS, FIFO_EN, 1, &data_aux);        // Disable gyro and accelerometer sensors for FIFO
 	this->f_read_bytes(MPU9250_ADDRESS, FIFO_COUNTH, 2, &data[0]); // read FIFO sample count
 	fifo_count = ((uint16_t)data[0] << 8) | data[1];
 	packet_count = fifo_count/12;// How many sets of full gyro and accelerometer data for averaging
@@ -727,6 +551,199 @@ void c_MPU9250::f_calibrate_mpu9250(void)
 }
 
 
+float c_MPU9250::f_get_accel_res()
+{
+	float accel_res;
+	switch (this->m_accel_scale)
+	{
+		// Possible accelerometer scales (and their register bit settings) are:
+		// 2 Gs (00), 4 Gs (01), 8 Gs (10), and 16 Gs  (11).
+			// Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
+		case E_ACC_SCALE::AFS_2G:
+			accel_res = 2.0/32768.0;
+			break;
+		case E_ACC_SCALE::AFS_4G:
+			accel_res = 4.0/32768.0;
+			break;
+		case E_ACC_SCALE::AFS_8G:
+			accel_res = 8.0/32768.0;
+			break;
+		case E_ACC_SCALE::AFS_16G:
+			accel_res = 16.0/32768.0;
+			break;
+		default:
+			accel_res = 2.0/32768.0;
+			break;
+	}
+	return accel_res;
+}
+
+float c_MPU9250::f_get_gyro_res()
+{
+	float gyro_res;
+	switch (this->m_gyro_scale)
+	{
+		// Possible gyro scales (and their register bit settings) are:
+		// 250 DPS (00), 500 DPS (01), 1000 DPS (10), and 2000 DPS  (11).
+			// Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
+		case E_GYRO_SCALE::GFS_250DPS:
+			gyro_res = 250.0/32768.0;
+			break;
+		case E_GYRO_SCALE::GFS_500DPS:
+			gyro_res = 500.0/32768.0;
+			break;
+		case E_GYRO_SCALE::GFS_1000DPS:
+			gyro_res = 1000.0/32768.0;
+			break;
+		case E_GYRO_SCALE::GFS_2000DPS:
+			gyro_res = 2000.0/32768.0;
+			break;
+		default:
+			gyro_res = 250.0/32768.0;
+			break;
+	}
+	return gyro_res;
+}
+
+
+uint8_t c_MPU9250::f_get_mag_mode(uint8_t mag_hz)
+{
+	float mag_mode;
+	switch (mag_hz)
+	{
+		case E_MAG_HZ::MFREQ_8HZ:
+			mag_mode = 0x02;
+			break;
+		case E_MAG_HZ::MFREQ_100HZ:
+			mag_mode = 0x06;
+			break;
+		default:
+			mag_mode = 0x06;
+			break;
+	}
+	return mag_mode;
+}
+
+float c_MPU9250::f_get_mag_res()
+{
+	float mag_res;
+	switch (this->m_mag_scale)
+	{
+		// Possible magnetometer scales (and their register bit settings) are:
+		// 14 bit resolution (0) and 16 bit resolution (1)
+		case E_MAG_SCALE::MFS_14BITS:
+			mag_res = 10.0*4912.0/8190.0; // Proper scale to return milliGauss
+			break;
+		case E_MAG_SCALE::MFS_16BITS:
+			mag_res = 10.0*4912.0/32760.0; // Proper scale to return milliGauss
+			break;
+		default:
+			mag_res = 10.0*4912.0/8190.0; // Proper scale to return milliGauss
+			break;
+	}
+	return mag_res;
+}
+
+void c_MPU9250::f_init_ak8963(void)
+{
+	  // First extract the factory calibration for each magnetometer axis
+	  uint8_t rawData[3] = {0};  // x/y/z gyro calibration data stored here
+	  uint8_t data = 0;
+	  uint8_t data_aux = 0;		// Para hacer los writes
+
+	  data_aux = 0x00;
+	  this->f_write_bytes(AK8963_ADDRESS, AK8963_CNTL, 1, &data_aux); // Power down magnetometer
+	  this->f_delay_ms(10);
+	  data_aux = 0x0F;
+	  this->f_write_bytes(AK8963_ADDRESS, AK8963_CNTL, 1, &data_aux); // Enter Fuse ROM access mode
+	  this->f_delay_ms(10);
+
+	  this->f_read_bytes(AK8963_ADDRESS, AK8963_ASAX, 3, &rawData[0]);  // Read the x-, y-, and z-axis calibration values
+	  this->m_mag_calibration[0] =  (float)(rawData[0] - 128)/256.0f + 1.0f;   // Return x-axis sensitivity adjustment values, etc.
+	  this->m_mag_calibration[1] =  (float)(rawData[1] - 128)/256.0f + 1.0f;
+	  this->m_mag_calibration[2] =  (float)(rawData[2] - 128)/256.0f + 1.0f;
+
+	  data_aux = 0x00;
+	  this->f_write_bytes(AK8963_ADDRESS, AK8963_CNTL, 1, &data_aux); // Power down magnetometer
+	  this->f_delay_ms(10);
+	  // Configure the magnetometer for continuous read and highest resolution
+	  // set Mscale bit 4 to 1 (0) to enable 16 (14) bit resolution in CNTL register,
+	  // and enable continuous mode data acquisition Mmode (bits [3:0]), 0010 for 8 Hz and 0110 for 100 Hz sample rates
+	  data_aux = this->m_mag_scale << 4 | this->m_mag_mode;
+	  this->f_write_bytes(AK8963_ADDRESS, AK8963_CNTL, 1, &data_aux); // Set magnetometer data resolution and sample ODR
+	  this->f_delay_ms(10);
+
+	  this->f_read_bytes(AK8963_ADDRESS, AK8963_WHO_AM_I,1,&data);
+	  if(data != 0x48)  // wait for magnetometer data ready bit to be set
+	  {
+		  while(1);
+	  }
+}
+
+
+void c_MPU9250::f_init_mpu9250()
+{
+	uint8_t data_aux = 0;	// Para escribir
+	 // Initialize MPU9250 device
+	 // wake up device
+	data_aux = 0x00;
+	  this->f_write_bytes(MPU9250_ADDRESS, PWR_MGMT_1, 1, &data_aux); // Clear sleep mode bit (6), enable all sensors
+	  this->f_delay_ms(100); // Delay 100 ms for PLL to get established on x-axis gyro; should check for PLL ready interrupt
+
+	 // get stable time source
+	  data_aux = 0x01;
+	  this->f_write_bytes(MPU9250_ADDRESS, PWR_MGMT_1, 1, &data_aux);  // Set clock source to be PLL with x-axis gyroscope reference, bits 2:0 = 001
+
+	 // Configure Gyro and Accelerometer
+	 // Disable FSYNC and set accelerometer and gyro bandwidth to 44 and 42 Hz, respectively;
+	 // DLPF_CFG = bits 2:0 = 010; this sets the sample rate at 1 kHz for both
+	 // Maximum delay is 4.9 ms which is just over a 200 Hz maximum rate
+	  data_aux = 0x03;
+	  this->f_write_bytes(MPU9250_ADDRESS, CONFIG, 1, &data_aux);
+
+	 // Set sample rate = gyroscope output rate/(1 + SMPLRT_DIV)
+	  data_aux = 0x04;
+	  this->f_write_bytes(MPU9250_ADDRESS, SMPLRT_DIV, 1, &data_aux);  // Use a 200 Hz rate; the same rate set in CONFIG above
+
+	 // Set gyroscope full scale range
+	 // Range selects FS_SEL and AFS_SEL are 0 - 3, so 2-bit values are left-shifted into positions 4:3
+
+	  this->f_read_bytes(MPU9250_ADDRESS, GYRO_CONFIG,1,&data_aux); // get current GYRO_CONFIG register value
+	 // c = c & ~0xE0; // Clear self-test bits [7:5]
+	  data_aux = data_aux & ~0x02; // Clear Fchoice bits [1:0]
+	  data_aux = data_aux & ~0x18; // Clear AFS bits [4:3]
+	  data_aux = data_aux | this->m_gyro_scale << 3; // Set full scale range for the gyro
+	 // c =| 0x00; // Set Fchoice for the gyro to 11 by writing its inverse to bits 1:0 of GYRO_CONFIG
+	  this->f_write_bytes(MPU9250_ADDRESS, GYRO_CONFIG, 1, &data_aux); // Write new GYRO_CONFIG value to register
+
+	 // Set accelerometer full-scale range configuration
+	  this->f_read_bytes(MPU9250_ADDRESS, ACCEL_CONFIG,1,&data_aux); // get current ACCEL_CONFIG register value
+	 // c = c & ~0xE0; // Clear self-test bits [7:5]
+	  data_aux = data_aux & ~0x18;  // Clear AFS bits [4:3]
+	  data_aux = data_aux | this->m_accel_scale << 3; // Set full scale range for the accelerometer
+	  this->f_write_bytes(MPU9250_ADDRESS, ACCEL_CONFIG, 1, &data_aux); // Write new ACCEL_CONFIG register value
+
+	 // Set accelerometer sample rate configuration
+	 // It is possible to get a 4 kHz sample rate from the accelerometer by choosing 1 for
+	 // accel_fchoice_b bit [3]; in this case the bandwidth is 1.13 kHz
+	  this->f_read_bytes(MPU9250_ADDRESS, ACCEL_CONFIG2,1,&data_aux); // get current ACCEL_CONFIG2 register value
+	  data_aux = data_aux & ~0x0F; // Clear accel_fchoice_b (bit 3) and A_DLPFG (bits [2:0])
+	  data_aux = data_aux | 0x03;  // Set accelerometer rate to 1 kHz and bandwidth to 41 Hz
+	  this->f_write_bytes(MPU9250_ADDRESS, ACCEL_CONFIG2, 1, &data_aux); // Write new ACCEL_CONFIG2 register value
+
+	 // The accelerometer, gyro, and thermometer are set to 1 kHz sample rates,
+	 // but all these rates are further reduced by a factor of 5 to 200 Hz because of the SMPLRT_DIV setting
+
+	  // Configure Interrupts and Bypass Enable
+	  // Set interrupt pin active high, push-pull, and clear on read of INT_STATUS, enable I2C_BYPASS_EN so additional chips
+	  // can join the I2C bus and all can be controlled by the Arduino as master
+//	   writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x22);
+	  data_aux = 0x02;
+	   this->f_write_bytes(MPU9250_ADDRESS, INT_PIN_CFG, 1, &data_aux);
+	   data_aux = 0x01;
+	   this->f_write_bytes(MPU9250_ADDRESS, INT_ENABLE, 1, &data_aux);  // Enable data ready (bit 0) interrupt
+}
+
 // Accelerometer and gyroscope self test; check calibration wrt factory settings
 void c_MPU9250::f_mpu9250_self_test(float * destination) // Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass
 {
@@ -735,12 +752,18 @@ void c_MPU9250::f_mpu9250_self_test(float * destination) // Should return percen
 	int32_t gAvg[3] = {0}, aAvg[3] = {0}, aSTAvg[3] = {0}, gSTAvg[3] = {0};
 	float factoryTrim[6];
 	uint8_t FS = 0;
+	uint8_t data_aux = 0; 	// Para escribir
 
-	this->f_write_byte(MPU9250_ADDRESS, SMPLRT_DIV, 0x00); // Set gyro sample rate to 1 kHz
-	this->f_write_byte(MPU9250_ADDRESS, CONFIG, 0x02); // Set gyro sample rate to 1 kHz and DLPF to 92 Hz
-	this->f_write_byte(MPU9250_ADDRESS, GYRO_CONFIG, FS<<3); // Set full scale range for the gyro to 250 dps
-	this->f_write_byte(MPU9250_ADDRESS, ACCEL_CONFIG2, 0x02); // Set accelerometer rate to 1 kHz and bandwidth to 92 Hz
-	this->f_write_byte(MPU9250_ADDRESS, ACCEL_CONFIG, FS<<3); // Set full scale range for the accelerometer to 2 g
+	data_aux = 0x00;
+	this->f_write_bytes(MPU9250_ADDRESS, SMPLRT_DIV, 1, &data_aux); // Set gyro sample rate to 1 kHz
+	data_aux = 0x02;
+	this->f_write_bytes(MPU9250_ADDRESS, CONFIG, 1, &data_aux); // Set gyro sample rate to 1 kHz and DLPF to 92 Hz
+	data_aux = FS<<3;
+	this->f_write_bytes(MPU9250_ADDRESS, GYRO_CONFIG, 1, &data_aux); // Set full scale range for the gyro to 250 dps
+	data_aux = 0x02;
+	this->f_write_bytes(MPU9250_ADDRESS, ACCEL_CONFIG2, 1, &data_aux); // Set accelerometer rate to 1 kHz and bandwidth to 92 Hz
+	data_aux = FS<<3;
+	this->f_write_bytes(MPU9250_ADDRESS, ACCEL_CONFIG, 1, &data_aux); // Set full scale range for the accelerometer to 2 g
 
 	for( int ii = 0; ii < 200; ii++) // get average current values of gyro and acclerometer
 	{
@@ -762,10 +785,11 @@ void c_MPU9250::f_mpu9250_self_test(float * destination) // Should return percen
 	}
 
 	// Configure the accelerometer for self-test
-	this->f_write_byte(MPU9250_ADDRESS, ACCEL_CONFIG, 0xE0); // Enable self test on all three axes and set accelerometer range to +/- 2 g
-	this->f_write_byte(MPU9250_ADDRESS, GYRO_CONFIG, 0xE0); // Enable self test on all three axes and set gyro range to +/- 250 degrees/s
+	data_aux = 0xE0;
+	this->f_write_bytes(MPU9250_ADDRESS, ACCEL_CONFIG, 1, &data_aux); // Enable self test on all three axes and set accelerometer range to +/- 2 g
+	this->f_write_bytes(MPU9250_ADDRESS, GYRO_CONFIG, 1, &data_aux); // Enable self test on all three axes and set gyro range to +/- 250 degrees/s
 //		delay(25); // Delay a while to let the device stabilize
-	HAL_Delay(10);
+	this->f_delay_ms(10);
 	for( int ii = 0; ii < 200; ii++) // get average self-test values of gyro and acclerometer
 	{
 		this->f_read_bytes(MPU9250_ADDRESS, ACCEL_XOUT_H, 6, &rawData[0]); // Read the six raw data registers into data array
@@ -786,18 +810,19 @@ void c_MPU9250::f_mpu9250_self_test(float * destination) // Should return percen
 	}
 
 	// Configure the gyro and accelerometer for normal operation
-	this->f_write_byte(MPU9250_ADDRESS, ACCEL_CONFIG, 0x00);
-	this->f_write_byte(MPU9250_ADDRESS, GYRO_CONFIG, 0x00);
+	data_aux = 0x00;
+	this->f_write_bytes(MPU9250_ADDRESS, ACCEL_CONFIG, 1, &data_aux);
+	this->f_write_bytes(MPU9250_ADDRESS, GYRO_CONFIG, 1, &data_aux);
 //   delay(25); // Delay a while to let the device stabilize
-	HAL_Delay(10);
+	this->f_delay_ms(10);
 
 	// Retrieve accelerometer and gyro factory Self-Test Code from USR_Reg
-	selfTest[0] = this->f_read_byte(MPU9250_ADDRESS, SELF_TEST_X_ACCEL); // X-axis accel self-test results
-	selfTest[1] = this->f_read_byte(MPU9250_ADDRESS, SELF_TEST_Y_ACCEL); // Y-axis accel self-test results
-	selfTest[2] = this->f_read_byte(MPU9250_ADDRESS, SELF_TEST_Z_ACCEL); // Z-axis accel self-test results
-	selfTest[3] = this->f_read_byte(MPU9250_ADDRESS, SELF_TEST_X_GYRO); // X-axis gyro self-test results
-	selfTest[4] = this->f_read_byte(MPU9250_ADDRESS, SELF_TEST_Y_GYRO); // Y-axis gyro self-test results
-	selfTest[5] = this->f_read_byte(MPU9250_ADDRESS, SELF_TEST_Z_GYRO); // Z-axis gyro self-test results
+	this->f_read_bytes(MPU9250_ADDRESS, SELF_TEST_X_ACCEL,1,&selfTest[0]); // X-axis accel self-test results
+	this->f_read_bytes(MPU9250_ADDRESS, SELF_TEST_Y_ACCEL,1,&selfTest[1]); // Y-axis accel self-test results
+	this->f_read_bytes(MPU9250_ADDRESS, SELF_TEST_Z_ACCEL,1,&selfTest[2]); // Z-axis accel self-test results
+	this->f_read_bytes(MPU9250_ADDRESS, SELF_TEST_X_GYRO,1,&selfTest[3]); // X-axis gyro self-test results
+	this->f_read_bytes(MPU9250_ADDRESS, SELF_TEST_Y_GYRO,1,&selfTest[4]); // Y-axis gyro self-test results
+	this->f_read_bytes(MPU9250_ADDRESS, SELF_TEST_Z_GYRO,1,&selfTest[5]); // Z-axis gyro self-test results
 
 	// Retrieve factory self-test value from self-test code reads
 	factoryTrim[0] = (float)(2620/1<<FS)*(pow( 1.01 , ((float)selfTest[0] - 1.0) )); // FT[Xa] factory trim calculation
@@ -816,3 +841,34 @@ void c_MPU9250::f_mpu9250_self_test(float * destination) // Should return percen
 	}
 
 }
+
+/*
+uint8_t c_MPU9250::f_read_byte(uint8_t address, uint8_t subAddress)
+{
+	uint8_t data = 0; // `data` will store the register data
+	if(HAL_I2C_Mem_Read(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data,1,100) != HAL_OK)
+	{
+		data = 255;
+	}
+	return data;
+}
+
+void c_MPU9250::f_read_bytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)
+{
+	if(HAL_I2C_Mem_Read(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&dest[0],count,100) != HAL_OK)
+	{
+	}
+}
+*/
+void c_MPU9250::f_reset_mpu9250(void)
+{
+	  // reset device
+	uint8_t data_aux = 0x80;
+	  this->f_write_bytes(MPU9250_ADDRESS, PWR_MGMT_1,1, &data_aux); // Write a one to bit 7 reset bit; toggle reset device
+	  this->f_delay_ms(100);
+}
+/*
+void c_MPU9250::f_write_bytes(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t data)
+{
+	HAL_I2C_Mem_Write(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data,count,100);
+}*/

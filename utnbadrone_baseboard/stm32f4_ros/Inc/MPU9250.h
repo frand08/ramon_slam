@@ -229,8 +229,6 @@ typedef struct MPU9250_data_t
 class c_MPU9250
 {
     private:
-		//Agregados cosa de que quede mas prolijo respecto a codigo original-----------------------------------
-
 		float m_accel_bias[3];
 		uint8_t m_accel_scale;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
 
@@ -257,10 +255,15 @@ class c_MPU9250
 		// of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
 		void f_calibrate_mpu9250(void);
 
+		// Puntero a funcion para tomar una funcion externa para el delay de milisegundos
+	    void(*f_delay_ms)(uint32_t);
+		void(*f_read_bytes)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t * dest);
+		void(*f_write_bytes)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data);
+
 		float f_get_accel_res();
 		float f_get_gyro_res();
-		float f_get_mag_res();
 		uint8_t f_get_mag_mode(uint8_t);
+		float f_get_mag_res();
 
 		void f_init_ak8963(void);
 		void f_init_mpu9250(void);
@@ -269,12 +272,11 @@ class c_MPU9250
 		void f_mpu9250_self_test(float * destination); // Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass
 
 		/* TODO: Generalizar las funciones de read y write byte(s) */
-		uint8_t f_read_byte(uint8_t address, uint8_t subAddress);
-		void f_read_bytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
-
+//		uint8_t f_read_byte(uint8_t address, uint8_t subAddress);
+//		void f_read_bytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest);
 		void f_reset_mpu9250(void);
 
-		void f_write_byte(uint8_t address, uint8_t subAddress, uint8_t data);
+//		void f_write_bytes(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t data);
 
     public:
 		// Set initial input parameters
@@ -306,7 +308,10 @@ class c_MPU9250
 		  MFREQ_100HZ   		// 100Hz Magnetometer data ODR
 		};
 
-		c_MPU9250();
+		c_MPU9250(void(*delay_func_ptr)(uint32_t),
+				 void(*read_bytes_ptr)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data),
+				 void(*write_func_ptr)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data));
+
 		/* TODO: Hacer un constructor adecuado para recibir parametros */
 		c_MPU9250(MPU9250_params);
 		~c_MPU9250();

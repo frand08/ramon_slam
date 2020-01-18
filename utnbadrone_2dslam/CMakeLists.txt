@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(utnbadrone_2dslam)
+project(ramon_slam2d)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
@@ -10,6 +10,7 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  tf
 )
 
 # No se por que se caga con esto el make
@@ -17,7 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES utnbadrone_2dslam
+#  LIBRARIES ramon_slam2d
 #  CATKIN_DEPENDS roscpp std_msgs
 #  DEPENDS system_lib
 )
@@ -35,3 +36,8 @@ add_library(mle src/mle.cpp)
 add_executable(lidar_transform src/lidar_transform.cpp)
 target_link_libraries(lidar_transform ${catkin_LIBRARIES} brasenham contour mle)
 
+
+add_library(ramon_slam2d_lib src/ramon_slam2d.cpp)
+
+add_executable(ramon_slam2d src/main.cpp)
+target_link_libraries(ramon_slam2d ${catkin_LIBRARIES} ramon_slam2d_lib)

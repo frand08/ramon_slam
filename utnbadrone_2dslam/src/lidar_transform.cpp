@@ -6,7 +6,6 @@
 #include "geometry_msgs/PoseStamped.h"
 #include "sensor_msgs/ChannelFloat32.h"
 #include "nav_msgs/OccupancyGrid.h"
-#include "visualization_msgs/Marker.h"
 
 #include "contour_extraction.h"
 #include "brasenham_line_algorithm.h"
@@ -17,7 +16,6 @@
 // #define GET_RIGIDBODY_TRANSFORM // Para calcular la transformada entre el nuevo set y el mapa
 
 ros::Publisher map_pub;
-ros::Publisher marker_pub;
 ros::Publisher pose_pub;
 
 #ifdef SEPARATE_POINTS
@@ -33,7 +31,7 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     static uint32_t seq = 0;
     static std::vector<sensor_msgs::PointCloud> contours;
     static int data_count = 0;
-    float map_resolution = 0.02;
+    float map_resolution = 0.05;
     float map_update_rate = 5.0;
     uint32_t map_width = 20;
     uint32_t map_height = 20;
@@ -49,7 +47,6 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     float scan_likelihood = 0;
 #endif
 
-    static visualization_msgs::Marker marker;
     static geometry_msgs::PoseStamped pose;
 
     // Para calcular tiempos del algoritmo
@@ -73,6 +70,9 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 
     bool map_regen;     // Para setear si se regenera siempre el mapa o si no
 
+    // Para el mle de cada punto
+    std::vector<int8_t> likelihood;
+
 #ifdef REGEN_MAP
     map_regen = true;
 #else
@@ -86,7 +86,6 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
     {
         // Cargamos los ids de los frames de cada uno
         lidar_map.header.frame_id = "map";
-        marker.header.frame_id = "marker";
         pose.header.frame_id= "pose";
 
         // Init del mapa
@@ -108,29 +107,6 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
         pose.pose.orientation.z = 0;
         pose.pose.orientation.w = 1;
 
-        // Para el marker
-        marker.ns = "my_namespace";
-        marker.id = 0;
-        marker.type = visualization_msgs::Marker::LINE_LIST;
-        
-        marker.scale.x = 10;
-        // marker.scale.y = 10;
-        // marker.scale.z = 0.0;
-
-        marker.color.r = 0.0;
-        marker.color.g = 0.0;
-        marker.color.b = 1.0;
-        marker.color.a = 1.0; // Don't forget to set the alpha!
-
-        // marker.pose.position.x = double(map_height/2);
-        // marker.pose.position.y = double(map_width/2);
-        marker.pose.position.x = 10.0;
-        marker.pose.position.y = 1.0;
-        marker.pose.position.z = 0;
-        marker.pose.orientation.x = 0;
-        marker.pose.orientation.y = 0;
-        marker.pose.orientation.z = 0;
-        marker.pose.orientation.w = 1;
         ROS_INFO("Size del mapa:%zd",lidar_map.data.size());
         // ROS_INFO("Lecturas tomadas por vuelta: %u",lidar_range_readings);
     }
@@ -222,6 +198,8 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
                 x_ls += (y*(log(y) - b[b.size()-1]*x))*(y*(log(y) - b[b.size()-1]*x));
 */
             }
+#else
+
 #endif
         }
         pointCount++;
@@ -229,11 +207,12 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
 
     // Luego, extraigo los contours para la primera vez en caso de que no tenga que
     // regenerar el mapa continuamente
-    if(first_time || map_regen == true)
-    {
-        // Obtiene contours, de una forma muy rudimentaria, habria que mejorarlo
-        contour_extraction(contour_array, points32_aux, dis_threshold);
-        ROS_INFO("Contours realizados, con:\n\taux:%zd\n\tarray:%zd",contour_aux.size(),contour_array.size());
+    // Obtiene contours, de una forma muy rudimentaria, habria que mejorarlo
+    contour_extraction(contour_array, points32_aux, dis_threshold);
+    ROS_INFO("Contours realizados, con:\n\taux:%zd\n\tarray:%zd",contour_aux.size(),contour_array.size());
+
+    // if(first_time || map_regen == true)
+    // {
 
         points_free.clear();
 
@@ -241,49 +220,137 @@ void scanCallback(const sensor_msgs::LaserScan::ConstPtr& msg)
         {
             for(j=0; j<contour_array[i].size(); j++)
             {
-                float x_value = contour_array[i][j].x/lidar_map.info.resolution;
-                float y_value = contour_array[i][j].y/lidar_map.info.resolution;
-                
-                squares_line(0, 0, x_value, y_value, points_free);
-
-                if(points_free.size() > 0)
+                if(first_time || map_regen == true)
                 {
-                    for(int mongo = 0; mongo < points_free.size(); mongo++)
-                    {
-                        map_point = lidar_map.info.height*lidar_map.info.width/2 - lidar_map.info.width/2 + 
-                                    int(int(points_free[mongo].y)*lidar_map.info.height + 
-                                    int(points_free[mongo].x));
+                
+                    float x_value = contour_array[i][j].x/lidar_map.info.resolution;
+                    float y_value = contour_array[i][j].y/lidar_map.info.resolution;
+                    
+                    squares_line(0, 0, x_value, y_value, points_free);
 
-                        if(lidar_map.data[map_point] == -1)
+                    if(points_free.size() > 0)
+                    {
+                        for(int mongo = 0; mongo < points_free.size(); mongo++)
                         {
-                            lidar_map.data[map_point] = 0;
+                            map_point = lidar_map.info.height*lidar_map.info.width/2 - lidar_map.info.width/2 + 
+                                        int(int(points_free[mongo].y)*lidar_map.info.height + 
+                                        int(points_free[mongo].x));
+
+                            if(lidar_map.data[map_point] == -1)
+                            {
+                                lidar_map.data[map_point] = 0;
+                            }
                         }
+                        points_free.clear();
                     }
-                    points_free.clear();
+                    // Obtengo el punto al que equivale el dato en el mapa
+                    map_point = lidar_map.info.height*lidar_map.info.width/2 - lidar_map.info.width/2 + 
+                                int(int(contour_array[i][j].y/lidar_map.info.resolution)*lidar_map.info.height + 
+                                int(contour_array[i][j].x/lidar_map.info.resolution));
+                    lidar_map.data[map_point] = 100;
+                }
+                else
+                {
+                    // Obtengo el punto al que equivale el dato en el mapa
+                    map_point = lidar_map.info.height*lidar_map.info.width/2 - lidar_map.info.width/2 + 
+                                int(int(contour_array[i][j].y/lidar_map.info.resolution)*lidar_map.info.height + 
+                                int(contour_array[i][j].x/lidar_map.info.resolution));
+
+                    // // Cuento si cae en 100 o si no
+                    // if(lidar_map.data[map_point] >= 0)
+                    //     count_points += lidar_map.data[map_point];                
+
+                }
+                                
+                /*
+                get_occupancy_likelihood(likelihood,contour_array[i][j],map_resolution,std_dev,std_dev);
+
+                // [0][0]
+                int point_aux = map_point - lidar_map.info.height - 1;
+                if(lidar_map.data[point_aux] > likelihood[0] || 
+                  lidar_map.data[point_aux] < 0)
+                {
+                    lidar_map.data[point_aux] = likelihood[0];
                 }
 
-                // Obtengo el punto al que equivale el dato en el mapa
-                map_point = lidar_map.info.height*lidar_map.info.width/2 - lidar_map.info.width/2 + 
-                            int(int(contour_array[i][j].y/lidar_map.info.resolution)*lidar_map.info.height + 
-                            int(contour_array[i][j].x/lidar_map.info.resolution));
+                // [0][1]
+                point_aux = map_point - lidar_map.info.height;
+                if(lidar_map.data[point_aux] > likelihood[1] || 
+                   lidar_map.data[point_aux] < 0) 
+                {
+                    lidar_map.data[point_aux] = likelihood[1];
+                }
+                
+                // [0][2]
+                point_aux = map_point - lidar_map.info.height + 1;
+                if(lidar_map.data[point_aux] > likelihood[2] || 
+                  lidar_map.data[point_aux] < 0) 
+                {
+                    lidar_map.data[point_aux] = likelihood[2];
+                }
 
-                lidar_map.data[map_point] = 100;
+                // [1][0]
+                point_aux = map_point - 1;
+                if(lidar_map.data[point_aux] > likelihood[3] || 
+                  lidar_map.data[point_aux] < 0) 
+                {
+                    lidar_map.data[point_aux] = likelihood[3];
+                }
+                
+                // [1][1]
+                point_aux = map_point;
+                if(lidar_map.data[point_aux] > likelihood[4] || 
+                  lidar_map.data[point_aux] < 0) 
+                {
+                    lidar_map.data[point_aux] = likelihood[4];
+                }
+
+                // [1][2]
+                point_aux = map_point + 1;
+                if(lidar_map.data[point_aux] > likelihood[5] || 
+                  lidar_map.data[point_aux] < 0)
+                {
+                    lidar_map.data[point_aux] = likelihood[5];
+                }
+
+                // [2][0]
+                point_aux = map_point + lidar_map.info.height - 1;
+                if(lidar_map.data[point_aux] > likelihood[6] || 
+                  lidar_map.data[point_aux] < 0)
+                {
+                    lidar_map.data[point_aux] = likelihood[6];
+                }
+
+                // [2][1]
+                point_aux = map_point + lidar_map.info.height;
+                if(lidar_map.data[point_aux] > likelihood[7] || 
+                  lidar_map.data[point_aux] < 0)
+                {
+                    lidar_map.data[point_aux] = likelihood[7];
+                }
+
+                // [2][2]
+                point_aux = map_point + lidar_map.info.height + 1;
+                if(lidar_map.data[point_aux] > likelihood[8] || 
+                  lidar_map.data[point_aux] < 0)
+                {
+                    lidar_map.data[point_aux] = likelihood[8];
+                }
+                */
             }        
         }
-    }
+    // }
     
     end_ = ros::WallTime::now();
     double execution_time = (end_ - start_).toNSec() * 1e-6;
     ROS_INFO_STREAM("Exectution time (ms): " << execution_time);
 
     lidar_map.header.stamp = ros::Time();
-    marker.header.stamp = ros::Time();
     pose.header.stamp = ros::Time();
 
     first_time = false;
 
     map_pub.publish(lidar_map);
-    marker_pub.publish(marker);
     pose_pub.publish(pose);
 
 #ifdef SEPARATE_POINTS
@@ -300,7 +367,6 @@ int main (int argc, char **argv)
 	ros::NodeHandle n;
 	ros::Subscriber scanSubscriber = n.subscribe("scan", 1000, scanCallback);
 
-    marker_pub = n.advertise<visualization_msgs::Marker>("marker",10);
     pose_pub = n.advertise<geometry_msgs::PoseStamped>("pose",10);
     map_pub = n.advertise<nav_msgs::OccupancyGrid>("map", 1000);    
 

@@ -24,9 +24,21 @@
 #include "nav_msgs/OccupancyGrid.h"
 #include "tf/tf.h"
 #include "tf/transform_broadcaster.h"
+#include <fstream>
 
 #define MAP_IDX(map_width, x, y) ((map_width) * (y) + (x))
 #define DEBUG_MODE -5
+
+// Struct for rigid body transform threads
+typedef struct
+{
+  Eigen::Matrix2Xf scan_in;
+  float sum_out;
+  float x_out;
+  float y_out;
+  float theta_out;
+  Eigen::Matrix2Xf scan_out;
+} rigid_t;
 
 class RamonSlam2D
 {
@@ -81,6 +93,9 @@ private:
   boost::thread* transform_thread_;
   float transform_publish_period_;
 
+  // Mutex
+  boost::mutex laser_processing_mutex_;
+
   // Data from points
   float point_free_, point_noinfo_, point_occupied_;
   float point_dis_threshold_;
@@ -106,6 +121,8 @@ private:
   // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
   void bresenhamLineHigh(float x0, float y0, float x1, float y1, std::vector<geometry_msgs::Point32>& point);
   void bresenhamLineLow(float x0, float y0, float x1, float y1, std::vector<geometry_msgs::Point32>& point);
+
+  int getMaximumLikelihoodTransform(int x_index, rigid_t& rigid);
 
   void getOccupancyLikelihood(Eigen::Matrix3f& likelihood, Eigen::Vector2f point);
 

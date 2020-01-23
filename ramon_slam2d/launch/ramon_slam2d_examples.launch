@@ -3,7 +3,7 @@
       <!-- casa_mercedes/2019-09-30_living_arriba_1hz.bag -->
       <!-- depto_piezafondo/_2019-10-14-10-38-58_pieza_fondo_1hz.bag -->
       <!-- depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag -->
-      <arg name="BagFile"           default="casa_mercedes/2019-09-30_living_arriba_1hz.bag"/>
+      <arg name="BagFile"           default="depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag"/>
 	
       <arg name="isSweep"	      default="false"/>
 	<arg name="isRecord"	      default="false"/>

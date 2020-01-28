@@ -80,6 +80,9 @@ private:
   // Float map (not an occupancygrid one)
   Eigen::MatrixXf map_eig_;
 
+  // Occupancygrid Map
+  nav_msgs::OccupancyGrid occmap_;
+
   int debug_;
 
   // ROS Publishers
@@ -119,8 +122,10 @@ private:
   /* Private functions */
 
   // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-  void bresenhamLineHigh(float x0, float y0, float x1, float y1, std::vector<geometry_msgs::Point32>& point);
-  void bresenhamLineLow(float x0, float y0, float x1, float y1, std::vector<geometry_msgs::Point32>& point);
+  void bresenhamLineHigh(float x0, float y0, float x1, float y1, int direction,
+                         std::vector<geometry_msgs::Point32>& point);
+  void bresenhamLineLow(float x0, float y0, float x1, float y1, int direction,
+                        std::vector<geometry_msgs::Point32>& point);
 
   int getMaximumLikelihoodTransform(int x_index, rigid_t& rigid);
 

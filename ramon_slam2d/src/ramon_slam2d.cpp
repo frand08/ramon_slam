@@ -69,22 +69,22 @@ void RamonSlam2D::bresenhamLineAlgorithm(float x0, float y0, float x1, float y1,
   {
     if (x0 > x1)
     {
-      this->bresenhamLineLow(x1, y1, x0, y0, point);
+      this->bresenhamLineLow(x1, y1, x0, y0, 1, point);
     }
     else
     {
-      this->bresenhamLineLow(x0, y0, x1, y1, point);
+      this->bresenhamLineLow(x0, y0, x1, y1, 0, point);
     }
   }
   else
   {
     if (y0 > y1)
     {
-      this->bresenhamLineHigh(x1, y1, x0, y0, point);
+      this->bresenhamLineHigh(x1, y1, x0, y0, 1, point);
     }
     else
     {
-      this->bresenhamLineHigh(x0, y0, x1, y1, point);
+      this->bresenhamLineHigh(x0, y0, x1, y1, 0, point);
     }
   }
 }
@@ -181,9 +181,11 @@ void RamonSlam2D::start()
  * @param y0
  * @param x1
  * @param y1
+ * @param direction
  * @param point
  */
-void RamonSlam2D::bresenhamLineHigh(float x0, float y0, float x1, float y1, std::vector<geometry_msgs::Point32>& point)
+void RamonSlam2D::bresenhamLineHigh(float x0, float y0, float x1, float y1, int direction,
+                                    std::vector<geometry_msgs::Point32>& point)
 {
   float dx = x1 - x0;
   float dy = y1 - y0;
@@ -213,6 +215,8 @@ void RamonSlam2D::bresenhamLineHigh(float x0, float y0, float x1, float y1, std:
     }
     D = D + 2 * dx;
   }
+  if (direction)
+    std::reverse(point.begin(), point.end());
 }
 
 /**
@@ -222,9 +226,11 @@ void RamonSlam2D::bresenhamLineHigh(float x0, float y0, float x1, float y1, std:
  * @param y0
  * @param x1
  * @param y1
+ * @param direction
  * @param point
  */
-void RamonSlam2D::bresenhamLineLow(float x0, float y0, float x1, float y1, std::vector<geometry_msgs::Point32>& point)
+void RamonSlam2D::bresenhamLineLow(float x0, float y0, float x1, float y1, int direction,
+                                   std::vector<geometry_msgs::Point32>& point)
 {
   float dx = x1 - x0;
   float dy = y1 - y0;
@@ -254,6 +260,8 @@ void RamonSlam2D::bresenhamLineLow(float x0, float y0, float x1, float y1, std::
     }
     D = D + 2 * dy;
   }
+  if (direction)
+    std::reverse(point.begin(), point.end());
 }
 
 /**
@@ -282,8 +290,8 @@ int RamonSlam2D::getMaximumLikelihoodTransform(int x_index, rigid_t& rigid)
       sum = 0.0;
       for (int m = 0; m < scan_aux.cols(); m++)
       {
-        index_x = int(round((m_ / 2 + scan_aux(0, m) + (x_ + x_index * delta_x)) / res_));
-        index_y = int(round((n_ / 2 + scan_aux(1, m) + (y_ + y_index * delta_y)) / res_));
+        index_x = int(round((m_ / 2 + scan_aux(0, m)) / res_));
+        index_y = int(round((n_ / 2 + scan_aux(1, m)) / res_));
         sum += pow((1 - map_eig_(index_x, index_y)), 2);
       }
 
@@ -310,11 +318,15 @@ int RamonSlam2D::getMaximumLikelihoodTransform(int x_index, rigid_t& rigid)
  */
 void RamonSlam2D::getOccupancyLikelihood(Eigen::Matrix3f& likelihood, Eigen::Vector2f point)
 {
-  float Px1x2, Px2x3, Px3x4;  // x likelihood values
-  float Py1y2, Py2y3, Py3y4;  // y likelihood values
+  // x likelihood values
+  float Px1x2, Px2x3, Px3x4;
+  // y likelihood values
+  float Py1y2, Py2y3, Py3y4;
 
-  float x1, x2, x3, x4;  // x positions of square lines
-  float y1, y2, y3, y4;  // y positions of square lines
+  // x positions of square lines
+  float x1, x2, x3, x4;
+  // y positions of square lines
+  float y1, y2, y3, y4;
 
   x2 = point(0);
   x1 = x2 - res_;
@@ -369,9 +381,6 @@ Eigen::Matrix2Xf RamonSlam2D::getPointsFromScan(sensor_msgs::LaserScan scan)
   int points_count = 0, points_aux = 0, i;
   std::vector<float> angles;
   float pointmod_reg, pointmod_next, pointmod_res;
-
-  // In case the last element of the scan as the first belong to a contour.
-  int first_contour = 0;
 
   for (float angle = scan.angle_min; angle < scan.angle_max; angle += scan.angle_increment)
   {
@@ -499,6 +508,16 @@ void RamonSlam2D::init()
   y_ = 0.0;
   theta_ = 0.0;
 
+  // Init occupancygrid map
+  occmap_.info.width = n_ / res_;
+  occmap_.info.height = m_ / res_;
+  occmap_.info.resolution = res_;
+  occmap_.info.origin.position.x = -0.5 * m_;
+  occmap_.info.origin.position.y = -0.5 * n_;
+  occmap_.info.origin.position.z = 0;
+  for (int i = 0; i < (m_ * n_) / (res_ * res_); i++)
+    occmap_.data.push_back(-1);
+
   // Define slam frames in case they were not given by user
   if (!nh_.getParam("base_frame", base_frame_))
     base_frame_ = "base_link";
@@ -570,7 +589,7 @@ Eigen::MatrixXf RamonSlam2D::inverseScanner(Eigen::Matrix2Xf scan_points)
 
     if (points_free.size() > 0)
     {
-      for (int index = 0; index < points_free.size(); index++)
+      for (int index = 0; index < points_free.size() - 1; index++)
       {
         // Update free points in map
         index_x = uint32_t(round(round(map_size(0) / res_) + points_free[index].x));
@@ -584,11 +603,18 @@ Eigen::MatrixXf RamonSlam2D::inverseScanner(Eigen::Matrix2Xf scan_points)
     index_x = uint32_t(round(round(map_size(0) / res_) + scan_points(0, i) / res_));
     index_y = uint32_t(round(round(map_size(1) / res_) + scan_points(1, i) / res_));
 
-    point_update(0) = scan_points(0, i) / res_;
-    point_update(1) = scan_points(1, i) / res_;
-
     // Update occupied points in map
-    this->logitUpdate(m, index_x, index_y, point_update);
+    
+    // Update around point option (3x3 matrix)
+    // point_update(0) = scan_points(0, i) / res_;
+    // point_update(1) = scan_points(1, i) / res_;
+    // this->logitUpdate(m, index_x, index_y, point_update);
+
+    // One point update option
+    m(index_x, index_y) =
+        this->getProbaFromLogit(this->getLogitFromProba(point_occupied_) +
+                                this->getLogitFromProba(m(index_x, index_y)) - getLogitFromProba(point_noinfo_));
+
     // Clear free points vector
     points_free.clear();
   }
@@ -604,7 +630,6 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 {
   static int first_time = 1;
   sensor_msgs::LaserScan scan = *scanptr;
-  nav_msgs::OccupancyGrid occmap;
 
   Eigen::MatrixXf map_scan;
   Eigen::Matrix2Xf scan_points, scan_out;
@@ -622,16 +647,6 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   }
 
   start_ = ros::WallTime::now();
-
-  // Init occmap
-  occmap.info.width = n_ / res_;
-  occmap.info.height = m_ / res_;
-  occmap.info.resolution = res_;
-  occmap.info.origin.position.x = -0.5 * m_;
-  occmap.info.origin.position.y = -0.5 * n_;
-  occmap.info.origin.position.z = 0;
-  for (int i = 0; i < (m_ * n_) / (res_ * res_); i++)
-    occmap.data.push_back(-1);
 
   // Get all valid points
   scan_points = this->getPointsFromScan(scan);
@@ -653,6 +668,7 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 
   map_delta_x = int(round(0.5 * (m_ / res_ - map_scan.rows())));
   map_delta_y = int(round(0.5 * (n_ / res_ - map_scan.cols())));
+
   for (int x = 0; x < map_scan.rows(); x++)
   {
     for (int y = 0; y < map_scan.cols(); y++)
@@ -662,7 +678,7 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
           this->getLogitFromProba(map_scan(x, y)) +
           this->getLogitFromProba(map_eig_(x + map_delta_x, y + map_delta_y)) - this->getLogitFromProba(point_noinfo_));
 
-      occmap.data[MAP_IDX(occmap.info.width, x + map_delta_x, y + map_delta_y)] =
+      occmap_.data[MAP_IDX(occmap_.info.width, x + map_delta_x, y + map_delta_y)] =
           uint8_t(map_eig_(x + map_delta_x, y + map_delta_y) * 100);
     }
   }
@@ -670,7 +686,7 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   end_ = ros::WallTime::now();
   double execution_time = (end_ - start_).toNSec() * 1e-6;
   ROS_INFO_STREAM_COND(debug_ < 0, "Exectution time (ms): " << execution_time);
-  map_pub_.publish(occmap);
+  map_pub_.publish(occmap_);
 }
 
 /**
@@ -687,9 +703,10 @@ void RamonSlam2D::logitUpdate(Eigen::MatrixXf& m, uint32_t index_x, uint32_t ind
   float logit_t0 = getLogitFromProba(point_noinfo_);
   Eigen::Matrix3f likelihood;
   this->getOccupancyLikelihood(likelihood, point);
-  for (int x = 0; x <= 2; x++)
+
+  for (int x = 0; x < likelihood.cols(); x++)
   {
-    for (int y = 0; y <= 2; y++)
+    for (int y = 0; y < likelihood.rows(); y++)
     {
       if (m.rows() >= (index_x + x) && m.cols() >= (index_y + y) && (index_x + x - 1) > 0 && (index_y + y - 1) > 0)
       {

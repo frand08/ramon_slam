@@ -20,6 +20,9 @@
 // En caso de querer calibrar el magnetometro unicamente uso este define, sino es modo normal
 //#define MAG_CALIBRATION
 
+// Si quiero usar con ROS habilito el define
+#define USING_ROS
+
 //void mpu9250_init(void);
 //uint32_t mpu9250_loop(sensor_msgs::Imu *imu);
 
@@ -53,6 +56,7 @@ extern void StartMagnetometerTask(void const * argument);
 extern void StartGPSTask(void const * argument);
 
 
+extern osThreadId publishTaskHandle;
 extern osSemaphoreId MPUIntSemHandle;
 extern osSemaphoreId GPSIntSemHandle;
 extern osMessageQId PublishQueueHandle;
@@ -66,6 +70,7 @@ extern osThreadId GPSTaskHandle;
 /* Node creation */
 ros::NodeHandle nh;
 
+#ifdef USING_ROS
 extern "C"
 {
 	void StartPublishTask(void const * argument)
@@ -90,12 +95,12 @@ extern "C"
 
 		chatter.data = "Hola\r\n";
 
-#ifdef MAG_CALIBRATION
+	#ifdef MAG_CALIBRATION
 		/* Definition of magnetometer_task */
 		const osThreadDef_t os_thread_def_magnetometer_task = \
 		{ (char*)"magnetometer_task", StartMagnetometerTask, osPriorityNormal, 0, 256};
 
-#else
+	#else
 		/* Movement subscriber */
 		ros::Subscriber<std_msgs::String> sub_movement("move", &movement_callback);
 
@@ -106,31 +111,31 @@ extern "C"
 		/* Definition of gps_task */
 		const osThreadDef_t os_thread_def_gps_task = \
 		{ (char*)"mpu9250_task", StartGPSTask, osPriorityNormal, 0, 256};
-#endif
+	#endif
 
 		nh.initNode();
 
-#ifdef MAG_CALIBRATION
+	#ifdef MAG_CALIBRATION
 		nh.advertise(pub_mag);
 
-#else
+	#else
 		nh.advertise(pub_imu);
 //		nh.advertise(pub_chatter);
 //		nh.advertise(pub_gps);
 //		nh.subscribe(sub_movement);
-#endif
+	#endif
 
-#ifdef MAG_CALIBRATION
+	#ifdef MAG_CALIBRATION
 		/* Creation of magnetometer_task */
 		MagnetometerTaskHandle = osThreadCreate(&os_thread_def_magnetometer_task, (void*)&magnetometer);
 
-#else
+	#else
 		/* Creation of mpu9250_task */
 		MPU9250TaskHandle = osThreadCreate(&os_thread_def_mpu9250_task, (void*)&imu);
 
 		/* Creation of gps_task */
 		GPSTaskHandle = osThreadCreate(&os_thread_def_gps_task, (void*)&gps);
-#endif
+	#endif
 
 		for(;;)
 		{
@@ -187,8 +192,42 @@ extern "C"
 			nh.getHardware()->reset_rbuf();
 	}
 }
+#else
+extern "C"
+{
+	void StartPublishTask(void const * argument)
+	{
+	#ifdef MAG_CALIBRATION
+		/* Creation of magnetometer_task */
+		MagnetometerTaskHandle = osThreadCreate(&os_thread_def_magnetometer_task, (void*)&magnetometer);
+
+	#else
+		/* Definition of mpu9250_task */
+		const osThreadDef_t os_thread_def_mpu9250_task = \
+		{ (char*)"mpu9250_task", StartMPU9250Task, osPriorityNormal, 0, 256};
+		/* Creation of mpu9250_task */
+		MPU9250TaskHandle = osThreadCreate(&os_thread_def_mpu9250_task, NULL);
+
+	#endif
+		osThreadTerminate(publishTaskHandle);
+		for(;;);
+	}
+}
+#endif
+
+void i2c_read_bytes(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t * dest)
+{
+	HAL_I2C_Mem_Read(&hi2c1,address,subAddress,I2C_MEMADD_SIZE_8BIT,&dest[0],(uint16_t)count,100);
+}
 
 
+void i2c_write_bytes(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data)
+{
+	HAL_I2C_Mem_Write(&hi2c1,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data[0],(uint16_t)count,100);
+}
+
+
+#ifdef USING_ROS
 typedef struct IMU_Send_t
 {
 	sensor_msgs::Imu *imu;
@@ -260,19 +299,6 @@ void StartMPU9250SendTask(void const * argument)
 		osMessagePut(PublishQueueHandle,0,0);
 	}
 }
-
-
-void i2c_read_bytes(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t * dest)
-{
-	HAL_I2C_Mem_Read(&hi2c1,address,subAddress,I2C_MEMADD_SIZE_8BIT,&dest[0],(uint16_t)count,100);
-}
-
-
-void i2c_write_bytes(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data)
-{
-	HAL_I2C_Mem_Write(&hi2c1,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data[0],(uint16_t)count,100);
-}
-
 
 void StartMPU9250Task(void const * argument)
 {
@@ -600,4 +626,53 @@ void movement_callback(const std_msgs::String& mov)
 
 	}
 }
+#else
+void StartMPU9250Task(void const * argument)
+{
+	c_MPU9250 mpu9250(&HAL_Delay,&i2c_read_bytes,&i2c_write_bytes);
 
+	accel_data accel;
+	gyro_data gyro;
+	mag_data mag;
+	float temp;
+	uint32_t timer;
+	uint8_t data[40], *aux;
+
+	if(!mpu9250.init())
+	{
+		HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_SET);
+		osThreadTerminate(MPU9250TaskHandle);
+	}
+	for(;;)
+	{
+		/* FIXME: Esta bien el == 0? */
+		if(osSemaphoreWait(MPUIntSemHandle,osWaitForever) == 0)
+		{
+			mpu9250.read_accel_data(accel);  // Read the x/y/z adc values
+			mpu9250.read_gyro_data(gyro);  // Read the x/y/z adc values
+
+
+			mpu9250.read_mag_data(mag);  // Read the x/y/z adc values
+
+			mpu9250.read_temp_data(temp);  // Read the adc values
+
+			timer = osKernelSysTick();
+
+			aux = (uint8_t*) &accel;
+			memcpy(&data[0],aux,12);
+
+			aux = (uint8_t*) &gyro;
+			memcpy(&data[12],aux,12);
+
+			aux = (uint8_t*) &mag;
+			memcpy(&data[24],aux,12);
+
+			aux = (uint8_t*) &temp;
+			memcpy(&data[32],aux,4);
+
+
+			HAL_UART_Transmit_DMA(&huart3,&data[0],36);
+		}
+	}
+}
+#endif

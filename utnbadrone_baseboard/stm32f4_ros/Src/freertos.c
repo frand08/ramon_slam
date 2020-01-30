@@ -9,7 +9,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * Copyright (c) 2019 STMicroelectronics International N.V. 
+  * Copyright (c) 2020 STMicroelectronics International N.V. 
   * All rights reserved.
   *
   * Redistribution and use in source and binary forms, with or without 
@@ -56,7 +56,7 @@
 /* USER CODE END Includes */
 
 /* Variables -----------------------------------------------------------------*/
-osThreadId publish_taskHandle;
+osThreadId publishTaskHandle;
 osMessageQId PublishQueueHandle;
 osSemaphoreId MPUIntSemHandle;
 osSemaphoreId GPSIntSemHandle;
@@ -109,9 +109,9 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the thread(s) */
-  /* definition and creation of publish_task */
-  osThreadDef(publish_task, StartPublishTask, osPriorityNormal, 0, 256);
-  publish_taskHandle = osThreadCreate(osThread(publish_task), NULL);
+  /* definition and creation of publishTask */
+  osThreadDef(publishTask, StartPublishTask, osPriorityNormal, 0, 256);
+  publishTaskHandle = osThreadCreate(osThread(publishTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */

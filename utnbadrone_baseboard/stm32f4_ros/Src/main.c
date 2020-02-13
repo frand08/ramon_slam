@@ -58,7 +58,6 @@
 
 /* USER CODE BEGIN Includes */
 //#include "mainpp.h"
-#include "MPU9250.h"
 #define PINGPONG_SIZE		128
 /* USER CODE END Includes */
 
@@ -123,7 +122,11 @@ int main(void)
   MX_TIM3_Init();
   MX_TIM8_Init();
   MX_TIM6_Init();
+  MX_TIM13_Init();
   /* USER CODE BEGIN 2 */
+  HAL_GPIO_WritePin(LD0_GPIO_Port,LD0_Pin,GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_SET);
   HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_3);
@@ -131,8 +134,8 @@ int main(void)
 
   HAL_TIM_IC_Start_IT(&htim8,TIM_CHANNEL_1);
   HAL_TIM_IC_Start_IT(&htim3,TIM_CHANNEL_2);
+  HAL_TIM_Base_Start(&htim13);
   HAL_TIM_Base_Start_IT(&htim6);
-  HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,0);
 
   /* USER CODE END 2 */
 

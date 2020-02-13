@@ -39,13 +39,23 @@
 /* USER CODE BEGIN 0 */
 #include "string.h"
 #include "mainpp.h"
-//extern volatile uint32_t mpu_int_state;
-extern volatile uint8_t buffer[PINGPONG_SIZE], databuf[PINGPONG_SIZE];
-//extern volatile uint8_t gps_int_state;
-extern uint32_t movement_counter;
+
 extern TIM_HandleTypeDef htim1;
-extern osSemaphoreId MPUIntSemHandle;
 extern osSemaphoreId GPSIntSemHandle;
+extern osMessageQId IMUQueueHandle;
+extern TIM_HandleTypeDef htim13;
+
+
+extern volatile uint8_t buffer[PINGPONG_SIZE], databuf[PINGPONG_SIZE];
+extern volatile uint32_t movement_counter;
+
+typedef struct
+{
+  __IO uint32_t ISR;   /*!< DMA interrupt status register */
+  __IO uint32_t Reserved0;
+  __IO uint32_t IFCR;  /*!< DMA interrupt flag clear register */
+} DMA_Base_Registers;
+
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -90,13 +100,15 @@ void SysTick_Handler(void)
 */
 void EXTI0_IRQHandler(void)
 {
+  uint32_t count;
   /* USER CODE BEGIN EXTI0_IRQn 0 */
 
   /* USER CODE END EXTI0_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
   /* USER CODE BEGIN EXTI0_IRQn 1 */
-//  mpu_int_state = 1;
-  osSemaphoreRelease(MPUIntSemHandle);
+  count = __HAL_TIM_GetCounter(&htim13);    //read TIM13 counter value
+  __HAL_TIM_SetCounter(&htim13,0);			//reset counter value
+  osMessagePut(IMUQueueHandle,count,0);
 //  HAL_GPIO_TogglePin(LD4_GPIO_Port,LD4_Pin);
   /* USER CODE END EXTI0_IRQn 1 */
 }
@@ -123,12 +135,6 @@ void DMA1_Stream2_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream2_IRQn 0 */
 		uint32_t len = 0, tocopy = 0;
 		uint32_t Write = 0;
-		typedef struct
-		{
-		  __IO uint32_t ISR;   /*!< DMA interrupt status register */
-		  __IO uint32_t Reserved0;
-		  __IO uint32_t IFCR;  /*!< DMA interrupt flag clear register */
-		} DMA_Base_Registers;
 
 		/* FIXME: Para que estaba este regs? */
 	//	DMA_Base_Registers *regs = (DMA_Base_Registers *)hdma_uart4_rx.StreamBaseAddress;
@@ -252,7 +258,6 @@ void TIM6_DAC_IRQHandler(void)
 	movement_counter ++;
 	if(movement_counter >= 700)
 	{
-		HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
 		movement_counter = 0;
 		__HAL_TIM_SetCompare(&htim1,TIM_CHANNEL_1,0);
 		__HAL_TIM_SetCompare(&htim1,TIM_CHANNEL_2,0);

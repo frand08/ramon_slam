@@ -1,15 +1,14 @@
 #ifndef MPU9250_H
 #define MPU9250_H
 
-//#include "mbed.h"
 #include "math.h"
-#include "stm32f4xx_hal.h"
+#include "stdint.h"
 
 // See also MPU-9250 Register Map and Descriptions, Revision 4.0, RM-MPU-9250A-00, Rev. 1.4, 9/9/2013 for registers not listed in 
 // above document; the MPU9250 and MPU9150 are virtually identical but the latter has a different register map
 //
 //Magnetometer Registers
-#define AK8963_ADDRESS   0x0C<<1
+#define AK8963_ADDRESS   0x0C
 #define AK8963_WHO_AM_I  0x00 // should return 0x48
 #define AK8963_INFO      0x01
 #define AK8963_ST1       0x02  // data ready status bit 0
@@ -158,17 +157,16 @@
 // Seven-bit device address is 110100 for ADO = 0 and 110101 for ADO = 1
 //mbed uses the eight-bit device address, so shift seven-bit addresses left by one!
 #define ADO 0
+
 #if ADO
-#define MPU9250_ADDRESS 0x69<<1  // Device address when ADO = 1
+#define MPU9250_ADDRESS 0x69  	// Device address when ADO = 1
 #else
-#define MPU9250_ADDRESS 0x68<<1  // Device address when ADO = 0
+#define MPU9250_ADDRESS 0x68  	// Device address when ADO = 0
 #endif  
 
 
 typedef struct MPU9250_params_t
 {
-	I2C_HandleTypeDef hi2c;				// I2C connected to MPU9250, eq, hi2c1.
-
 	uint8_t accel_scale;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
 	uint8_t gyro_scale; 				// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
 	uint8_t mag_scale; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
@@ -208,15 +206,6 @@ typedef struct mag_data_t
 	float z;
 } mag_data;
 
-typedef struct MPU9250_data_t
-{
-	accel_data accel;
-	gyro_data gyro;
-	mag_data mag;
-	float temp;
-	float q[4];
-} MPU9250_data;
-
 
 #define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
 #define Ki 0.0f
@@ -240,8 +229,6 @@ class c_MPU9250
 
 		float m_gyro_bias[3];
 		uint8_t m_gyro_scale; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
-
-		I2C_HandleTypeDef m_hi2c;
 
 		float m_mag_bias[3];
 		float m_mag_calibration[3];				// Factory mag calibration
@@ -331,9 +318,13 @@ class c_MPU9250
 		void mahony_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q, float);
 
 		void read_accel_data(accel_data &);
+		void read_accel_data_raw(int16_t *rawData);
 		void read_gyro_data(gyro_data &);
+		void read_gyro_data_raw(int16_t *rawData);
 		void read_mag_data(mag_data &);
+		int read_mag_data_raw(int16_t *rawData);
 		void read_temp_data(float &);
+		void read_temp_data_raw(int16_t *rawData);
 };
 #endif
 #endif

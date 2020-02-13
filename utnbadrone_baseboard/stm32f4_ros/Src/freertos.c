@@ -58,7 +58,8 @@
 /* Variables -----------------------------------------------------------------*/
 osThreadId publishTaskHandle;
 osMessageQId PublishQueueHandle;
-osSemaphoreId MPUIntSemHandle;
+osMessageQId IMUQueueHandle;
+osMessageQId MovementQueueHandle;
 osSemaphoreId GPSIntSemHandle;
 
 /* USER CODE BEGIN Variables */
@@ -67,6 +68,7 @@ osThreadId MPU9250SendTaskHandle;
 osThreadId MPU9250TaskHandle;
 osThreadId MagnetometerTaskHandle;
 osThreadId GPSTaskHandle;
+osThreadId MovementTaskHandle;
 /* USER CODE END Variables */
 
 /* Function prototypes -------------------------------------------------------*/
@@ -92,10 +94,6 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE END RTOS_MUTEX */
 
   /* Create the semaphores(s) */
-  /* definition and creation of MPUIntSem */
-  osSemaphoreDef(MPUIntSem);
-  MPUIntSemHandle = osSemaphoreCreate(osSemaphore(MPUIntSem), 1);
-
   /* definition and creation of GPSIntSem */
   osSemaphoreDef(GPSIntSem);
   GPSIntSemHandle = osSemaphoreCreate(osSemaphore(GPSIntSem), 1);
@@ -122,6 +120,16 @@ void MX_FREERTOS_Init(void) {
 /* what about the sizeof here??? cd native code */
   osMessageQDef(PublishQueue, 16, uint32_t);
   PublishQueueHandle = osMessageCreate(osMessageQ(PublishQueue), NULL);
+
+  /* definition and creation of IMUQueue */
+/* what about the sizeof here??? cd native code */
+  osMessageQDef(IMUQueue, 16, uint32_t);
+  IMUQueueHandle = osMessageCreate(osMessageQ(IMUQueue), NULL);
+
+  /* definition and creation of MovementQueue */
+/* what about the sizeof here??? cd native code */
+  osMessageQDef(MovementQueue, 16, uint32_t);
+  MovementQueueHandle = osMessageCreate(osMessageQ(MovementQueue), NULL);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */

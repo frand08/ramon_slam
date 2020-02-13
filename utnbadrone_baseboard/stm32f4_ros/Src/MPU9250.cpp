@@ -53,8 +53,6 @@ c_MPU9250::c_MPU9250(void(*delay_func_ptr)(uint32_t),
 	this->m_mag_scale = c_MPU9250::E_MAG_SCALE::MFS_16BITS; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
 	this->m_mag_mode = this->f_get_mag_mode(E_MAG_HZ::MFREQ_100HZ);        // Either 8 Hz (0x02) or 100 Hz (0x06) magnetometer data ODR
 
-//	this->m_hi2c = hi2c1;
-
 	this->m_deltat = 0.0f;                             // integration interval for both filter schemes
 
 	this->m_q[0] = 1.0f;								// vector to hold quaternion
@@ -328,63 +326,88 @@ void c_MPU9250::mahony_quaternion_update(float ax, float ay, float az, float gx,
 
 void c_MPU9250::read_accel_data(accel_data &accel)
 {
-	  uint8_t rawData[6];  // x/y/z accel register data stored here
 	  int16_t data[3];
+
+	  this->read_accel_data_raw(data);
+
+	  accel.x = (float)data[0]*this->f_get_accel_res();// - this->m_accel_bias[0];  // get actual g value, this depends on scale being set
+	  accel.y = (float)data[1]*this->f_get_accel_res();// - this->m_accel_bias[1];
+	  accel.z = (float)data[2]*this->f_get_accel_res();// - this->m_accel_bias[2];
+}
+
+void c_MPU9250::read_accel_data_raw(int16_t *data)
+{
+	uint8_t rawData[6];
 	  this->f_read_bytes(MPU9250_ADDRESS, ACCEL_XOUT_H, 6, &rawData[0]);  // Read the six raw data registers into data array
 	  data[0] = (int16_t)(((int16_t)rawData[0] << 8) | rawData[1]) ;  // Turn the MSB and LSB into a signed 16-bit value
 	  data[1] = (int16_t)(((int16_t)rawData[2] << 8) | rawData[3]) ;
 	  data[2] = (int16_t)(((int16_t)rawData[4] << 8) | rawData[5]) ;
-
-	  // Para NED tengo que invertir x con y, ademas de negar z
-	  accel.x = (float)data[1]*this->f_get_accel_res();// - this->m_accel_bias[1];  // get actual g value, this depends on scale being set
-	  accel.y = (float)data[0]*this->f_get_accel_res();// - this->m_accel_bias[0];
-	  accel.z = -(float)data[2]*this->f_get_accel_res();// - this->m_accel_bias[2];
 }
 
 void c_MPU9250::read_gyro_data(gyro_data &gyro)
 {
-	  uint8_t rawData[6];  // x/y/z gyro register data stored here
 	  int16_t data[3];
-	  this->f_read_bytes(MPU9250_ADDRESS, GYRO_XOUT_H, 6, &rawData[0]);  // Read the six raw data registers sequentially into data array
-	  data[0] = (int16_t)(((int16_t)rawData[0] << 8) | rawData[1]) ;  // Turn the MSB and LSB into a signed 16-bit value
-	  data[1] = (int16_t)(((int16_t)rawData[2] << 8) | rawData[3]) ;
-	  data[2] = (int16_t)(((int16_t)rawData[4] << 8) | rawData[5]) ;
 
-	  // Para NED tengo que invertir x con y, ademas de negar z
-	  gyro.x = (float)data[1]*this->f_get_gyro_res();// - this->m_gyro_bias[1];  // get actual gyro value, this depends on scale being set
-	  gyro.y = (float)data[0]*this->f_get_gyro_res();// - this->m_gyro_bias[0];
-	  gyro.z = -(float)data[2]*this->f_get_gyro_res();// - this->m_gyro_bias[2];
+	  this->read_gyro_data_raw(data);
+
+	  gyro.x = (float)data[0]*this->f_get_gyro_res();// - this->m_gyro_bias[1];  // get actual gyro value, this depends on scale being set
+	  gyro.y = (float)data[1]*this->f_get_gyro_res();// - this->m_gyro_bias[0];
+	  gyro.z = (float)data[2]*this->f_get_gyro_res();// - this->m_gyro_bias[2];
+}
+
+void c_MPU9250::read_gyro_data_raw(int16_t *data)
+{
+	uint8_t rawData[6];
+	this->f_read_bytes(MPU9250_ADDRESS, GYRO_XOUT_H, 6, &rawData[0]);  // Read the six raw data registers sequentially into data array
+	data[0] = (int16_t)(((int16_t)rawData[0] << 8) | rawData[1]) ;  // Turn the MSB and LSB into a signed 16-bit value
+	data[1] = (int16_t)(((int16_t)rawData[2] << 8) | rawData[3]) ;
+	data[2] = (int16_t)(((int16_t)rawData[4] << 8) | rawData[5]) ;
 }
 
 void c_MPU9250::read_mag_data(mag_data &mag)
 {
-	  uint8_t rawData[7];  // x/y/z gyro register data, ST2 register stored here, must read ST2 at end of data acquisition
-	  uint8_t c;
-	  uint16_t data[3];
-	  this->f_read_bytes(AK8963_ADDRESS, AK8963_ST1,1,&c);
-	  if(c & 0x01)  // wait for magnetometer data ready bit to be set
-	  {
-		  this->f_read_bytes(AK8963_ADDRESS, AK8963_XOUT_L, 7, &rawData[0]);  // Read the six raw data and ST2 registers sequentially into data array
-		  c = rawData[6]; // End data read by reading ST2 register
-			if(!(c & 0x08)) // Check if magnetic sensor overflow set, if not then report data
-			{
-				data[0] = (int16_t)(((int16_t)rawData[1] << 8) | rawData[0]) ;  // Turn the MSB and LSB into a signed 16-bit value
-				data[1] = (int16_t)(((int16_t)rawData[3] << 8) | rawData[2]) ;  // Data stored as little Endian
-				data[2] = (int16_t)(((int16_t)rawData[5] << 8) | rawData[4]) ;
-				mag.x = (float)data[0]*this->f_get_mag_res()*this->m_mag_calibration[0] - this->m_mag_bias[0];  // get actual magnetometer value, this depends on scale being set
-				mag.y = (float)data[1]*this->f_get_mag_res()*this->m_mag_calibration[1] - this->m_mag_bias[1];
-				mag.z = (float)data[2]*this->f_get_mag_res()*this->m_mag_calibration[2] - this->m_mag_bias[2];
-			}
-	  }
+
+	int16_t data[3];
+
+	if(this->read_mag_data_raw(data) >= 0)
+	{
+		// Offsets from calibration (MATLAB)
+		mag.x = ((float)data[0] - 187.5)*1.1395*this->f_get_mag_res()*this->m_mag_calibration[0];// - this->m_mag_bias[0];  // get actual magnetometer value, this depends on scale being set
+		mag.y = ((float)data[1] - 190.5)*0.9245*this->f_get_mag_res()*this->m_mag_calibration[1];// - this->m_mag_bias[1];
+		mag.z = ((float)data[2] + 131.5)*0.9608*this->f_get_mag_res()*this->m_mag_calibration[2];// - this->m_mag_bias[2];
+	}
 }
 
+int c_MPU9250::read_mag_data_raw(int16_t *rawData)
+{
+	uint8_t c, auxData[7];
+	this->f_read_bytes(AK8963_ADDRESS, AK8963_ST1,1,&c);
+	if(c & 0x01)  // wait for magnetometer data ready bit to be set
+	{
+	this->f_read_bytes(AK8963_ADDRESS, AK8963_XOUT_L, 7, &auxData[0]);  // Read the six raw data and ST2 registers sequentially into data array
+	c = auxData[6]; // End data read by reading ST2 register
+	if(!(c & 0x08)) // Check if magnetic sensor overflow set, if not then report data
+	{
+		rawData[0] = (int16_t)(((int16_t)auxData[1] << 8) | auxData[0]) ;  // Turn the MSB and LSB into a signed 16-bit value
+		rawData[1] = (int16_t)(((int16_t)auxData[3] << 8) | auxData[2]) ;  // Data stored as little Endian
+		rawData[2] = (int16_t)(((int16_t)auxData[5] << 8) | auxData[4]) ;
+		return 0;
+	}
+}
+	  return -1;
+}
 void c_MPU9250::read_temp_data(float &temp)
 {
-	  uint16_t rawTemp;
+	  int16_t rawTemp;
+	  this->read_accel_data_raw(&rawTemp);
+	  temp = ((float) rawTemp) / 333.87f + 21.0f; // Temperature in degrees Centigrade
+
+}
+void c_MPU9250::read_temp_data_raw(int16_t *rawTemp)
+{
 	  uint8_t rawData[2];  // x/y/z gyro register data stored here
 	  this->f_read_bytes(MPU9250_ADDRESS, TEMP_OUT_H, 2, &rawData[0]);  // Read the two raw data registers sequentially into data array
-	  rawTemp = (int16_t)(((int16_t)rawData[0]) << 8 | rawData[1]);  // Turn the MSB and LSB into a 16-bit value
-	  temp = ((float) rawTemp) / 333.87f + 21.0f; // Temperature in degrees Centigrade
+	  *rawTemp = (int16_t)(((int16_t)rawData[0]) << 8 | rawData[1]);  // Turn the MSB and LSB into a 16-bit value
 
 }
 

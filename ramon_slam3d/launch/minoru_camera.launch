@@ -1,0 +1,40 @@
+<!-- minoru_camera.launch -->
+<launch>
+
+	<!-- set left/right camera device and calibration url -->
+	<arg name="right_camera_dev"	value="/dev/video2" />
+	<arg name="left_camera_dev"		value="/dev/video4" />
+	<arg name="left_camera_url"		value="$(find ramon_slam3d)/info/camera_info/320_240_left_camera.yaml" />
+	<arg name="right_camera_url"	value="$(find ramon_slam3d)/info/camera_info/320_240_right_camera.yaml" />
+
+
+	<!-- set image size -->
+	<arg name="image_width"		value="320" />
+	<arg name="image_height"	value="240" />
+	
+	<!-- set camera parameters -->
+	<arg name="fps"				value="20" />
+	<arg name="skip_frames"		value="0" />
+	<!-- <arg name="frame_id"		value="stereo_camera" /> -->
+
+		<node pkg="uvc_camera" type="uvc_stereo_node" name="stereo_cam" output="screen">
+	  	<!-- left camera params -->
+			<param name="left/device"								type="string"	value="$(arg left_camera_dev)"/>
+			<param name="left/camera_info_url"			type="string" 	value="file://$(arg left_camera_url)" />
+			<param name="left/rotate"								type="bool" 	value="false" />
+
+	  	<!-- right camera params -->
+        <param name="right/device"						type="string"	value="$(arg right_camera_dev)"/>
+				<param name="right/camera_info_url"		type="string" 	value="file://$(arg right_camera_url)" />
+				<param name="right/rotate"						type="bool" 	value="false" />
+		
+	  	<!-- general params -->
+        <param name="fps"               			type="int"    	value="$(arg fps)"/>
+        <param name="width"			    					type="int"		value="$(arg image_width)"/>
+        <param name="height"									type="int"		value="$(arg image_height)"/>
+        <param name="skip_frames"        			type="int"		value="$(arg skip_frames)" />
+        <!-- <param name="frame_id"	        		type="string"	value="$(arg frame_id)" /> -->
+		</node>
+
+</launch>
+

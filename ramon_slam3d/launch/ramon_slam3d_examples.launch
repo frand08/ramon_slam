@@ -1,0 +1,24 @@
+<!-- ramon_slam3d_examples.launch -->
+<launch>
+
+	<!-- Rotate the camera frame.(x y z yaw pitch roll) -->
+	<arg name="pi/2" value="1.5707963267948966" />
+	<arg name="optical_rotate" value="0 0 0.5 -$(arg pi/2) 0 -$(arg pi/2)" />
+	<node name="camera_base_link" pkg="tf" type="static_transform_publisher"
+		args="$(arg optical_rotate) base_link camera 100" />
+
+	<group ns="stereo">
+		<!-- Run the stereo camera -->
+	    <include file="$(find ramon_slam3d)/launch/minoru_camera.launch" />
+
+		<!-- Run the ROS package stereo_image_proc for image rectification -->
+		<node name="stereo_image_proc" pkg="stereo_image_proc" type="stereo_image_proc" output="screen"  >
+			<param name="queue_size" value="2000" />
+			<param name="approximate_sync" value="True" />
+			<remap from="/stereo/left/image" to="/stereo/left/image_raw"/>
+			<remap from="/stereo/right/image" to="/stereo/right/image_raw"/>
+		</node>
+	</group>
+
+</launch>
+

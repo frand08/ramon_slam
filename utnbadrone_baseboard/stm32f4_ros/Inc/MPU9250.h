@@ -164,24 +164,37 @@
 #define MPU9250_ADDRESS 0x68  	// Device address when ADO = 0
 #endif  
 
+#define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
+#define Ki 0.0f
+
+#define GRAVITY -9.80665f		// Gravity value
+#define PI 		3.14159265358979323846f
+
 
 typedef struct MPU9250_params_t
 {
-	uint8_t accel_scale;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
+	float accel_bias[3];
+	uint8_t accel_scale;     			// AFS_2G, AFS_4G, AFS_8G, AFS_16G
+
+	float gyro_bias[3];
 	uint8_t gyro_scale; 				// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+
+	float mag_offset_bias[3];			// Hard iron correction
+	float mag_scale_bias[3];			// Soft iron correction
 	uint8_t mag_scale; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
-	uint8_t mag_mode;       			// Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR
+	uint8_t mag_mode;       			// Either 8 Hz (0x02) or 100 Hz (0x06) magnetometer data ODR
 
 	// scale resolutions per LSB for the sensors
 	float accel_res;
 	float gyro_res;
 	float mag_res;
 
-	float deltat;                			// integration interval for both filter schemes
-	float q[4];    						// vector to hold quaternion
-	float e_int[3];  						// vector to hold integral error for Mahony method
+	float beta; 						// compute beta
 
-	float beta; 							// compute beta
+	// Function pointers
+    void(*delay_ms)(uint32_t);
+	void(*read_bytes)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t * dest);
+	void(*write_bytes)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data);
 
 } MPU9250_params;
 
@@ -206,43 +219,34 @@ typedef struct mag_data_t
 	float z;
 } mag_data;
 
-
-#define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
-#define Ki 0.0f
-
-#define GRAVITY -9.81f		//Valor de la gravedad (modulo)
-#define PI 		3.14159265358979323846f
-
 #ifdef __cplusplus
 
 class c_MPU9250
 {
     private:
-		float m_accel_bias[3];
-		uint8_t m_accel_scale;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
+		float accel_bias_[3];
+		uint8_t accel_scale_;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
 
-		float m_beta; 							// compute beta
+		float beta_; 							// compute beta
 
-		float m_deltat;             			// integration interval for both filter schemes
+		float e_int_[3];  						// vector to hold integral error for Mahony method
 
-		float m_e_int[3];  						// vector to hold integral error for Mahony method
+		float gyro_bias_[3];
+		uint8_t gyro_scale_; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
 
-		float m_gyro_bias[3];
-		uint8_t m_gyro_scale; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+		float mag_offset_bias_[3];				// Hard iron correction
+		float mag_scale_bias_[3];				// Soft iron correction
+		float mag_calibration_[3];				// Factory mag calibration
+		uint8_t mag_mode_;       				// Either 8 Hz (0x02) or 100 Hz (0x06) magnetometer data ODR
+		uint8_t mag_scale_; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
 
-		float m_mag_bias[3];
-		float m_mag_calibration[3];				// Factory mag calibration
-		uint8_t m_mag_mode;       				// Either 8 Hz 0x02) or 100 Hz (0x06) magnetometer data ODR
-		uint8_t m_mag_scale; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
-
-		float m_q[4];    						// vector to hold quaternion
-
+		float q_[4];    						// vector to hold quaternion
 
 		// Function which accumulates gyro and accelerometer data after device initialization. It calculates the average
 		// of the at-rest readings and then loads the resulting offsets into accelerometer and gyro bias registers.
 		void f_calibrate_mpu9250(void);
 
-		// Puntero a funcion para tomar una funcion externa para el delay de milisegundos
+		// Needed functions provided by user
 	    void(*f_delay_ms)(uint32_t);
 		void(*f_read_bytes)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t * dest);
 		void(*f_write_bytes)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data);
@@ -300,7 +304,7 @@ class c_MPU9250
 				 void(*write_func_ptr)(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t *data));
 
 		/* TODO: Hacer un constructor adecuado para recibir parametros */
-		c_MPU9250(MPU9250_params);
+		c_MPU9250(MPU9250_params params);
 		~c_MPU9250();
 
 		// Check for IMU status and initializes both chips

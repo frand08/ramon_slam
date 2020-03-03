@@ -57,8 +57,7 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN Includes */
-//#include "mainpp.h"
-#define PINGPONG_SIZE		128
+#include "mainpp.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -241,6 +240,25 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 		HAL_GPIO_TogglePin(LD0_GPIO_Port,LD0_Pin);
 	}
 }
+
+/* FIXME: FLASH Functions not working properly */
+
+// SECTOR 11: 0x080E0000 - 0x080EFFFF
+void Flash_Write(uint32_t address, uint32_t data)
+{
+	HAL_FLASH_Unlock();
+	FLASH_Erase_Sector(FLASH_SECTOR_11, VOLTAGE_RANGE_3);
+	while(HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, data) != HAL_OK);
+	HAL_FLASH_Lock();
+}
+
+uint32_t Flash_Read(uint32_t address)
+{
+	uint32_t data;
+	data = *(uint32_t*) address;
+	return data;
+}
+
 /* USER CODE END 4 */
 
 /**

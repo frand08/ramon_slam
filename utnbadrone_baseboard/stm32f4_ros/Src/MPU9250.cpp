@@ -45,35 +45,72 @@ c_MPU9250::c_MPU9250(void(*delay_func_ptr)(uint32_t),
 //	float GyroMeasDrift = PI * (1.0f / 180.0f);      // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
 //	float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;  // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
 
-	/* FIXME: Tomar tiempos del RTOS */
-//	lastUpdate = HAL_GetTick();
-	this->m_accel_scale = c_MPU9250::E_ACC_SCALE::AFS_16G;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
-	this->m_gyro_scale = c_MPU9250::E_GYRO_SCALE::GFS_250DPS; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+	accel_scale_ = c_MPU9250::E_ACC_SCALE::AFS_16G;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
+	gyro_scale_ = c_MPU9250::E_GYRO_SCALE::GFS_250DPS; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
 
-	this->m_mag_scale = c_MPU9250::E_MAG_SCALE::MFS_16BITS; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
-	this->m_mag_mode = this->f_get_mag_mode(E_MAG_HZ::MFREQ_100HZ);        // Either 8 Hz (0x02) or 100 Hz (0x06) magnetometer data ODR
+	mag_scale_ = c_MPU9250::E_MAG_SCALE::MFS_16BITS; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
+	mag_mode_ = E_MAG_HZ::MFREQ_100HZ;        	// Either 8 Hz (0x02) or 100 Hz (0x06) magnetometer data ODR
 
-	this->m_deltat = 0.0f;                             // integration interval for both filter schemes
+	// vector to hold quaternion
+	q_[0] = 1.0f;
+	q_[1] = 0.0f;
+	q_[2] = 0.0f;
+	q_[3] = 0.0f;
 
-	this->m_q[0] = 1.0f;								// vector to hold quaternion
-	this->m_q[1] = 0.0f;
-	this->m_q[2] = 0.0f;
-	this->m_q[3] = 0.0f;
+	// vector to hold integral error for Mahony method
+	e_int_[0] = 0.0f;
+	e_int_[1] = 0.0f;
+	e_int_[2] = 0.0f;
 
-	this->m_e_int[0] = 0.0f;		// vector to hold integral error for Mahony method
-	this->m_e_int[1] = 0.0f;
-	this->m_e_int[2] = 0.0f;
+	beta_ = sqrt(3.0f / 4.0f) * GyroMeasError;  // compute beta
 
-	this->m_beta = sqrt(3.0f / 4.0f) * GyroMeasError;  // compute beta
+	mag_offset_bias_[0] = +187.5;  // User environmental x-axis correction
+    mag_offset_bias_[1] = +190.5;  // User environmental y-axis correction
+    mag_offset_bias_[2] = -131.5;  // User environmental z-axis correction
 
-	this->m_mag_bias[0] = +470.;  // User environmental x-axis correction in milliGauss, should be automatically calculated
-    this->m_mag_bias[1] = +120.;  // User environmental x-axis correction in milliGauss
-    this->m_mag_bias[2] = +125.;  // User environmental x-axis correction in milliGauss
+    mag_scale_bias_[0] = 1.1395;
+    mag_scale_bias_[1] = 0.9245;
+    mag_scale_bias_[2] = 0.9608;
 
     this->f_delay_ms = delay_func_ptr;
     this->f_read_bytes = read_func_ptr;
     this->f_write_bytes = write_func_ptr;
 }
+
+c_MPU9250::c_MPU9250(MPU9250_params params)
+{
+	accel_scale_ = params.accel_scale;     				// AFS_2G, AFS_4G, AFS_8G, AFS_16G
+	gyro_scale_ = params.gyro_scale; 					// GFS_250DPS, GFS_500DPS, GFS_1000DPS, GFS_2000DPS
+
+	mag_scale_ = params.mag_scale; 					// MFS_14BITS or MFS_16BITS, 14-bit or 16-bit magnetometer resolution
+	mag_mode_ = params.mag_mode;        // Either 8 Hz (0x02) or 100 Hz (0x06) magnetometer data ODR
+
+	// vector to hold quaternion
+	q_[0] = 1.0f;
+	q_[1] = 0.0f;
+	q_[2] = 0.0f;
+	q_[3] = 0.0f;
+
+	// vector to hold integral error for Mahony method
+	e_int_[0] = 0.0f;
+	e_int_[1] = 0.0f;
+	e_int_[2] = 0.0f;
+
+	beta_ = params.beta;  	// compute beta
+
+	mag_offset_bias_[0] = params.mag_offset_bias[0];  // User environmental x-axis correction in milliGauss, should be automatically calculated
+    mag_offset_bias_[1] = params.mag_offset_bias[1];  // User environmental x-axis correction in milliGauss
+    mag_offset_bias_[2] = params.mag_offset_bias[2];  // User environmental x-axis correction in milliGauss
+
+    mag_scale_bias_[0] = params.mag_scale_bias[0];
+    mag_scale_bias_[1] = params.mag_scale_bias[1];
+    mag_scale_bias_[2] = params.mag_scale_bias[2];
+
+    this->f_delay_ms = params.delay_ms;
+    this->f_read_bytes = params.read_bytes;
+    this->f_write_bytes = params.write_bytes;
+}
+
 
 c_MPU9250::~c_MPU9250()
 {
@@ -126,7 +163,7 @@ bool c_MPU9250::init(void)
 // but is much less computationally intensive---it can be performed on a 3.3 V Pro Mini operating at 8 MHz!
 void c_MPU9250::madgwick_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q, float deltat)
 {
-	float q1 = this->m_q[0], q2 = this->m_q[1], q3 = this->m_q[2], q4 = this->m_q[3];   // short name local variable for readability
+	float q1 = q_[0], q2 = q_[1], q3 = q_[2], q4 = q_[3];   // short name local variable for readability
 	float norm;
 	float hx, hy, _2bx, _2bz;
 	float s1, s2, s3, s4;
@@ -155,8 +192,6 @@ void c_MPU9250::madgwick_quaternion_update(float ax, float ay, float az, float g
 	float q3q3 = q3 * q3;
 	float q3q4 = q3 * q4;
 	float q4q4 = q4 * q4;
-
-	this->m_deltat = deltat;
 
 	// Normalise accelerometer measurement
 	norm = sqrt(ax * ax + ay * ay + az * az);
@@ -199,26 +234,26 @@ void c_MPU9250::madgwick_quaternion_update(float ax, float ay, float az, float g
 	s4 *= norm;
 
 	// Compute rate of change of quaternion
-	qDot1 = 0.5f * (-q2 * gx - q3 * gy - q4 * gz) - this->m_beta * s1;
-	qDot2 = 0.5f * (q1 * gx + q3 * gz - q4 * gy) - this->m_beta * s2;
-	qDot3 = 0.5f * (q1 * gy - q2 * gz + q4 * gx) - this->m_beta * s3;
-	qDot4 = 0.5f * (q1 * gz + q2 * gy - q3 * gx) - this->m_beta * s4;
+	qDot1 = 0.5f * (-q2 * gx - q3 * gy - q4 * gz) - beta_ * s1;
+	qDot2 = 0.5f * (q1 * gx + q3 * gz - q4 * gy) - beta_ * s2;
+	qDot3 = 0.5f * (q1 * gy - q2 * gz + q4 * gx) - beta_ * s3;
+	qDot4 = 0.5f * (q1 * gz + q2 * gy - q3 * gx) - beta_ * s4;
 
 	// Integrate to yield quaternion
-	q1 += qDot1 * this->m_deltat;
-	q2 += qDot2 * this->m_deltat;
-	q3 += qDot3 * this->m_deltat;
-	q4 += qDot4 * this->m_deltat;
+	q1 += qDot1 * deltat;
+	q2 += qDot2 * deltat;
+	q3 += qDot3 * deltat;
+	q4 += qDot4 * deltat;
 	norm = sqrt(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4);    // normalise quaternion
 	norm = 1.0f/norm;
-	this->m_q[0] = q1 * norm;
-	this->m_q[1] = q2 * norm;
-	this->m_q[2] = q3 * norm;
-	this->m_q[3] = q4 * norm;
-	q[0] = this->m_q[0];
-	q[1] = this->m_q[1];
-	q[2] = this->m_q[2];
-	q[3] = this->m_q[3];
+	q_[0] = q1 * norm;
+	q_[1] = q2 * norm;
+	q_[2] = q3 * norm;
+	q_[3] = q4 * norm;
+	q[0] = q_[0];
+	q[1] = q_[1];
+	q[2] = q_[2];
+	q[3] = q_[3];
 }
 
 
@@ -227,7 +262,7 @@ void c_MPU9250::madgwick_quaternion_update(float ax, float ay, float az, float g
 // measured ones.
 void c_MPU9250::mahony_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q, float deltat)
 {
-	float q1 = this->m_q[0], q2 = this->m_q[1], q3 = this->m_q[2], q4 = this->m_q[3];   // short name local variable for readability
+	float q1 = q_[0], q2 = q_[1], q3 = q_[2], q4 = q_[3];   // short name local variable for readability
 	float norm;
 	float hx, hy, bx, bz;
 	float vx, vy, vz, wx, wy, wz;
@@ -245,9 +280,6 @@ void c_MPU9250::mahony_quaternion_update(float ax, float ay, float az, float gx,
 	float q3q3 = q3 * q3;
 	float q3q4 = q3 * q4;
 	float q4q4 = q4 * q4;
-
-
-	this->m_deltat = deltat;
 
 	// Normalise accelerometer measurement
 	norm = sqrt(ax * ax + ay * ay + az * az);
@@ -285,42 +317,42 @@ void c_MPU9250::mahony_quaternion_update(float ax, float ay, float az, float gx,
 	ez = (ax * vy - ay * vx) + (mx * wy - my * wx);
 	if (Ki > 0.0f)
 	{
-		this->m_e_int[0] += ex;      // accumulate integral error
-		this->m_e_int[1] += ey;
-		this->m_e_int[2] += ez;
+		e_int_[0] += ex;      // accumulate integral error
+		e_int_[1] += ey;
+		e_int_[2] += ez;
 	}
 	else
 	{
-		this->m_e_int[0] = 0.0f;     // prevent integral wind up
-		this->m_e_int[1] = 0.0f;
-		this->m_e_int[2] = 0.0f;
+		e_int_[0] = 0.0f;     // prevent integral wind up
+		e_int_[1] = 0.0f;
+		e_int_[2] = 0.0f;
 	}
 
 	// Apply feedback terms
-	gx = gx + Kp * ex + Ki * this->m_e_int[0];
-	gy = gy + Kp * ey + Ki * this->m_e_int[1];
-	gz = gz + Kp * ez + Ki * this->m_e_int[2];
+	gx = gx + Kp * ex + Ki * e_int_[0];
+	gy = gy + Kp * ey + Ki * e_int_[1];
+	gz = gz + Kp * ez + Ki * e_int_[2];
 
 	// Integrate rate of change of quaternion
 	pa = q2;
 	pb = q3;
 	pc = q4;
-	q1 = q1 + (-q2 * gx - q3 * gy - q4 * gz) * (0.5f * this->m_deltat);
-	q2 = pa + (q1 * gx + pb * gz - pc * gy) * (0.5f * this->m_deltat);
-	q3 = pb + (q1 * gy - pa * gz + pc * gx) * (0.5f * this->m_deltat);
-	q4 = pc + (q1 * gz + pa * gy - pb * gx) * (0.5f * this->m_deltat);
+	q1 = q1 + (-q2 * gx - q3 * gy - q4 * gz) * (0.5f * deltat);
+	q2 = pa + (q1 * gx + pb * gz - pc * gy) * (0.5f * deltat);
+	q3 = pb + (q1 * gy - pa * gz + pc * gx) * (0.5f * deltat);
+	q4 = pc + (q1 * gz + pa * gy - pb * gx) * (0.5f * deltat);
 
 	// Normalise quaternion
 	norm = sqrt(q1 * q1 + q2 * q2 + q3 * q3 + q4 * q4);
 	norm = 1.0f / norm;
-	this->m_q[0] = q1 * norm;
-	this->m_q[1] = q2 * norm;
-	this->m_q[2] = q3 * norm;
-	this->m_q[3] = q4 * norm;
-	q[0] = this->m_q[0];
-	q[1] = this->m_q[1];
-	q[2] = this->m_q[2];
-	q[3] = this->m_q[3];
+	q_[0] = q1 * norm;
+	q_[1] = q2 * norm;
+	q_[2] = q3 * norm;
+	q_[3] = q4 * norm;
+	q[0] = q_[0];
+	q[1] = q_[1];
+	q[2] = q_[2];
+	q[3] = q_[3];
 }
 
 
@@ -330,9 +362,9 @@ void c_MPU9250::read_accel_data(accel_data &accel)
 
 	  this->read_accel_data_raw(data);
 
-	  accel.x = (float)data[0]*this->f_get_accel_res();// - this->m_accel_bias[0];  // get actual g value, this depends on scale being set
-	  accel.y = (float)data[1]*this->f_get_accel_res();// - this->m_accel_bias[1];
-	  accel.z = (float)data[2]*this->f_get_accel_res();// - this->m_accel_bias[2];
+	  accel.x = (float)data[0]*this->f_get_accel_res();// - accel_bias_[0];  // get actual g value, this depends on scale being set
+	  accel.y = (float)data[1]*this->f_get_accel_res();// - accel_bias_[1];
+	  accel.z = (float)data[2]*this->f_get_accel_res();// - accel_bias_[2];
 }
 
 void c_MPU9250::read_accel_data_raw(int16_t *data)
@@ -350,9 +382,9 @@ void c_MPU9250::read_gyro_data(gyro_data &gyro)
 
 	  this->read_gyro_data_raw(data);
 
-	  gyro.x = (float)data[0]*this->f_get_gyro_res();// - this->m_gyro_bias[1];  // get actual gyro value, this depends on scale being set
-	  gyro.y = (float)data[1]*this->f_get_gyro_res();// - this->m_gyro_bias[0];
-	  gyro.z = (float)data[2]*this->f_get_gyro_res();// - this->m_gyro_bias[2];
+	  gyro.x = (float)data[0]*this->f_get_gyro_res();// - gyro_bias_[0];  // get actual gyro value, this depends on scale being set
+	  gyro.y = (float)data[1]*this->f_get_gyro_res();// - gyro_bias_[1];
+	  gyro.z = (float)data[2]*this->f_get_gyro_res();// - gyro_bias_[2];
 }
 
 void c_MPU9250::read_gyro_data_raw(int16_t *data)
@@ -372,9 +404,9 @@ void c_MPU9250::read_mag_data(mag_data &mag)
 	if(this->read_mag_data_raw(data) >= 0)
 	{
 		// Offsets from calibration (MATLAB)
-		mag.x = ((float)data[0] - 187.5)*1.1395*this->f_get_mag_res()*this->m_mag_calibration[0];// - this->m_mag_bias[0];  // get actual magnetometer value, this depends on scale being set
-		mag.y = ((float)data[1] - 190.5)*0.9245*this->f_get_mag_res()*this->m_mag_calibration[1];// - this->m_mag_bias[1];
-		mag.z = ((float)data[2] + 131.5)*0.9608*this->f_get_mag_res()*this->m_mag_calibration[2];// - this->m_mag_bias[2];
+		mag.x = ((float)data[0] - mag_offset_bias_[0])*mag_scale_bias_[0]*this->f_get_mag_res()*mag_calibration_[0];	// get actual magnetometer value, this depends on scale being set
+		mag.y = ((float)data[1] - mag_offset_bias_[1])*mag_scale_bias_[1]*this->f_get_mag_res()*mag_calibration_[1];
+		mag.z = ((float)data[2] - mag_offset_bias_[2])*mag_scale_bias_[2]*this->f_get_mag_res()*mag_calibration_[2];
 	}
 }
 
@@ -516,9 +548,9 @@ void c_MPU9250::f_calibrate_mpu9250(void)
 	  writeByte(MPU9250_ADDRESS, ZG_OFFSET_H, data[4]);
 	  writeByte(MPU9250_ADDRESS, ZG_OFFSET_L, data[5]);
 	*/
-	this->m_gyro_bias[0] = (float) gyro_bias[0]/(float) gyrosensitivity; // construct gyro bias in deg/s for later manual subtraction
-	this->m_gyro_bias[1] = (float) gyro_bias[1]/(float) gyrosensitivity;
-	this->m_gyro_bias[2] = (float) gyro_bias[2]/(float) gyrosensitivity;
+	gyro_bias_[0] = (float) gyro_bias[0]/(float) gyrosensitivity; // construct gyro bias in deg/s for later manual subtraction
+	gyro_bias_[1] = (float) gyro_bias[1]/(float) gyrosensitivity;
+	gyro_bias_[2] = (float) gyro_bias[2]/(float) gyrosensitivity;
 
 	// Construct the accelerometer biases for push to the hardware accelerometer bias registers. These registers contain
 	// factory trim values which must be added to the calculated accelerometer biases; on boot up these registers will hold
@@ -568,16 +600,16 @@ void c_MPU9250::f_calibrate_mpu9250(void)
 	  writeByte(MPU9250_ADDRESS, ZA_OFFSET_L, data[5]);
 	*/
 	// Output scaled accelerometer biases for manual subtraction in the main program
-	this->m_accel_bias[0] = (float)accel_bias[0]/(float)accelsensitivity;
-	this->m_accel_bias[1] = (float)accel_bias[1]/(float)accelsensitivity;
-	this->m_accel_bias[2] = (float)accel_bias[2]/(float)accelsensitivity;
+	accel_bias_[0] = (float)accel_bias[0]/(float)accelsensitivity;
+	accel_bias_[1] = (float)accel_bias[1]/(float)accelsensitivity;
+	accel_bias_[2] = (float)accel_bias[2]/(float)accelsensitivity;
 }
 
 
 float c_MPU9250::f_get_accel_res()
 {
 	float accel_res;
-	switch (this->m_accel_scale)
+	switch (accel_scale_)
 	{
 		// Possible accelerometer scales (and their register bit settings) are:
 		// 2 Gs (00), 4 Gs (01), 8 Gs (10), and 16 Gs  (11).
@@ -604,7 +636,7 @@ float c_MPU9250::f_get_accel_res()
 float c_MPU9250::f_get_gyro_res()
 {
 	float gyro_res;
-	switch (this->m_gyro_scale)
+	switch (gyro_scale_)
 	{
 		// Possible gyro scales (and their register bit settings) are:
 		// 250 DPS (00), 500 DPS (01), 1000 DPS (10), and 2000 DPS  (11).
@@ -650,7 +682,7 @@ uint8_t c_MPU9250::f_get_mag_mode(uint8_t mag_hz)
 float c_MPU9250::f_get_mag_res()
 {
 	float mag_res;
-	switch (this->m_mag_scale)
+	switch (mag_scale_)
 	{
 		// Possible magnetometer scales (and their register bit settings) are:
 		// 14 bit resolution (0) and 16 bit resolution (1)
@@ -682,9 +714,9 @@ void c_MPU9250::f_init_ak8963(void)
 	  this->f_delay_ms(10);
 
 	  this->f_read_bytes(AK8963_ADDRESS, AK8963_ASAX, 3, &rawData[0]);  // Read the x-, y-, and z-axis calibration values
-	  this->m_mag_calibration[0] =  (float)(rawData[0] - 128)/256.0f + 1.0f;   // Return x-axis sensitivity adjustment values, etc.
-	  this->m_mag_calibration[1] =  (float)(rawData[1] - 128)/256.0f + 1.0f;
-	  this->m_mag_calibration[2] =  (float)(rawData[2] - 128)/256.0f + 1.0f;
+	  mag_calibration_[0] =  (float)(rawData[0] - 128)/256.0f + 1.0f;   // Return x-axis sensitivity adjustment values, etc.
+	  mag_calibration_[1] =  (float)(rawData[1] - 128)/256.0f + 1.0f;
+	  mag_calibration_[2] =  (float)(rawData[2] - 128)/256.0f + 1.0f;
 
 	  data_aux = 0x00;
 	  this->f_write_bytes(AK8963_ADDRESS, AK8963_CNTL, 1, &data_aux); // Power down magnetometer
@@ -692,7 +724,7 @@ void c_MPU9250::f_init_ak8963(void)
 	  // Configure the magnetometer for continuous read and highest resolution
 	  // set Mscale bit 4 to 1 (0) to enable 16 (14) bit resolution in CNTL register,
 	  // and enable continuous mode data acquisition Mmode (bits [3:0]), 0010 for 8 Hz and 0110 for 100 Hz sample rates
-	  data_aux = this->m_mag_scale << 4 | this->m_mag_mode;
+	  data_aux = mag_scale_ << 4 | this->f_get_mag_mode(mag_mode_);
 	  this->f_write_bytes(AK8963_ADDRESS, AK8963_CNTL, 1, &data_aux); // Set magnetometer data resolution and sample ODR
 	  this->f_delay_ms(10);
 
@@ -735,7 +767,7 @@ void c_MPU9250::f_init_mpu9250()
 	 // c = c & ~0xE0; // Clear self-test bits [7:5]
 	  data_aux = data_aux & ~0x02; // Clear Fchoice bits [1:0]
 	  data_aux = data_aux & ~0x18; // Clear AFS bits [4:3]
-	  data_aux = data_aux | this->m_gyro_scale << 3; // Set full scale range for the gyro
+	  data_aux = data_aux | gyro_scale_ << 3; // Set full scale range for the gyro
 	 // c =| 0x00; // Set Fchoice for the gyro to 11 by writing its inverse to bits 1:0 of GYRO_CONFIG
 	  this->f_write_bytes(MPU9250_ADDRESS, GYRO_CONFIG, 1, &data_aux); // Write new GYRO_CONFIG value to register
 
@@ -743,7 +775,7 @@ void c_MPU9250::f_init_mpu9250()
 	  this->f_read_bytes(MPU9250_ADDRESS, ACCEL_CONFIG,1,&data_aux); // get current ACCEL_CONFIG register value
 	 // c = c & ~0xE0; // Clear self-test bits [7:5]
 	  data_aux = data_aux & ~0x18;  // Clear AFS bits [4:3]
-	  data_aux = data_aux | this->m_accel_scale << 3; // Set full scale range for the accelerometer
+	  data_aux = data_aux | accel_scale_ << 3; // Set full scale range for the accelerometer
 	  this->f_write_bytes(MPU9250_ADDRESS, ACCEL_CONFIG, 1, &data_aux); // Write new ACCEL_CONFIG register value
 
 	 // Set accelerometer sample rate configuration
@@ -865,24 +897,6 @@ void c_MPU9250::f_mpu9250_self_test(float * destination) // Should return percen
 
 }
 
-/*
-uint8_t c_MPU9250::f_read_byte(uint8_t address, uint8_t subAddress)
-{
-	uint8_t data = 0; // `data` will store the register data
-	if(HAL_I2C_Mem_Read(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data,1,100) != HAL_OK)
-	{
-		data = 255;
-	}
-	return data;
-}
-
-void c_MPU9250::f_read_bytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)
-{
-	if(HAL_I2C_Mem_Read(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&dest[0],count,100) != HAL_OK)
-	{
-	}
-}
-*/
 void c_MPU9250::f_reset_mpu9250(void)
 {
 	  // reset device
@@ -893,5 +907,5 @@ void c_MPU9250::f_reset_mpu9250(void)
 /*
 void c_MPU9250::f_write_bytes(uint8_t address, uint8_t subAddress, uint32_t count, uint8_t data)
 {
-	HAL_I2C_Mem_Write(&this->m_hi2c,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data,count,100);
+	HAL_I2C_Mem_Write(&hi2c_,address,subAddress,I2C_MEMADD_SIZE_8BIT,&data,count,100);
 }*/

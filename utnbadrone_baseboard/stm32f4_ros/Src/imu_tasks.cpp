@@ -4,6 +4,7 @@
 #include <sensor_msgs/MagneticField.h>
 #include "cmsis_os.h"
 #include "stm32f4xx_hal.h"
+#include "mainpp.h"
 
 extern I2C_HandleTypeDef hi2c1;
 
@@ -30,7 +31,6 @@ void i2c_write_bytes(uint8_t address, uint8_t subAddress, uint32_t count, uint8_
 void StartMPU9250Task(void const * argument)
 {
 	sensor_msgs::Imu *imu_send;
-	c_MPU9250 mpu9250(&HAL_Delay,&i2c_read_bytes,&i2c_write_bytes);
 
 	accel_data accel;
 	gyro_data gyro;
@@ -39,6 +39,29 @@ void StartMPU9250Task(void const * argument)
 	float q[4];
 	bool first_time = true;
 	osEvent event;
+
+//	c_MPU9250 mpu9250(&HAL_Delay,&i2c_read_bytes,&i2c_write_bytes);
+
+	float GyroMeasError = PI * (60.0f / 180.0f);     // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
+
+	MPU9250_params params;
+	params.accel_scale = c_MPU9250::E_ACC_SCALE::AFS_16G;
+	params.gyro_scale = c_MPU9250::E_GYRO_SCALE::GFS_250DPS;
+	params.mag_scale = c_MPU9250::E_MAG_SCALE::MFS_16BITS;
+	params.mag_mode = c_MPU9250::E_MAG_HZ::MFREQ_100HZ;
+	params.mag_offset_bias[0] = +187.5;
+	params.mag_offset_bias[1] = +190.5;
+	params.mag_offset_bias[2] = -131.5;
+	params.mag_scale_bias[0] = 1.1395;
+	params.mag_scale_bias[1] = 0.9245;
+	params.mag_scale_bias[2] = 0.9608;
+	params.delay_ms = &HAL_Delay;
+	params.read_bytes = &i2c_read_bytes;
+	params.write_bytes = &i2c_write_bytes;
+	params.beta = sqrt(3.0f / 4.0f) * GyroMeasError;
+
+	c_MPU9250 mpu9250(params);
+
 
 	imu_send = (sensor_msgs::Imu *) argument;
 
@@ -98,10 +121,12 @@ void StartMPU9250Task(void const * argument)
 		event = osMessageGet(IMUQueueHandle,osWaitForever);
 		if(event.status == osEventMessage)
 		{
-			// Update ROS time
-			imu_send->header.stamp.sec = nh.now().sec;
-			imu_send->header.stamp.nsec = nh.now().nsec;
-
+			if(nh.connected())
+			{
+				// Update ROS time
+				imu_send->header.stamp.sec = nh.now().sec;
+				imu_send->header.stamp.nsec = nh.now().nsec;
+			}
 			// Esta en NED tomando ref del magnetometro
 
 			mpu9250.read_accel_data(accel);  // Read the x/y/z adc values
@@ -147,6 +172,7 @@ void StartMPU9250Task(void const * argument)
 						q,
 						float(event.value.v/1000000.0f));
 
+				/* raw linear acceleration to m/sec² */
 				imu_send->linear_acceleration.x = accel.x*GRAVITY;
 				imu_send->linear_acceleration.y = accel.y*GRAVITY;
 				imu_send->linear_acceleration.z = accel.z*GRAVITY;

@@ -11,6 +11,7 @@ struct gyro_cal_functor
 	Eigen::MatrixXf gyro_values;
 	Eigen::MatrixXf accel_values;
 	Eigen::Vector4f q_init;
+	Eigen::Vector3f b_g;
     float dt_factor, dt;
     float c1, c2, c3, c4;
     float a21, a31, a41, a32, a42, a43;
@@ -29,7 +30,7 @@ struct gyro_cal_functor
 		Eigen::Vector3f gravity_versor, ug_k_1;
         Eigen::Matrix3f T_g;
         Eigen::Matrix3f K_g;
-        Eigen::Vector3f b_g;
+        // Eigen::Vector3f b_g;
 
         float g_yz = x(0);
         float g_zy = x(1);
@@ -40,9 +41,6 @@ struct gyro_cal_functor
         float sg_x = x(6);
         float sg_y = x(7);
         float sg_z = x(8);
-        float bg_x = x(9);
-        float bg_y = x(10);
-        float bg_z = x(11);
 
         Eigen::Vector3f xValue;             // w_s
 
@@ -58,10 +56,6 @@ struct gyro_cal_functor
         K_g << sg_x,  0  ,   0  ,
                 0  , sg_y,   0  ,
                 0  ,  0  ,  sg_z;
-        
-        b_g << bg_x,
-               bg_y,
-               bg_z;         
 
         yValue = 0;
 
@@ -219,4 +213,4 @@ struct gyro_cal_functor
 
 };
 
-int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, Eigen::VectorXf &output_values);
+int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, float t_init, Eigen::VectorXf &output_values);

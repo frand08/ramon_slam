@@ -13,14 +13,17 @@
 
 #include "allan_variance.h"
 
+#include "matplotlibcpp.h"
+namespace plt = matplotlibcpp;
+
 int main (int argc, char** argv)
 {
-    ros::init (argc, argv, "gyro_variance");    
+    ros::init (argc, argv, "gyro_variance");  
     rosbag::Bag bag;
 	Eigen::MatrixXf gyro_values, gyro_allan_variance;
     std::ofstream file("test.txt");
   
-    bag.open("/home/fdominguez/Documents/bagfiles/imu_data3.bag", rosbag::bagmode::Read);
+    bag.open("/home/fdominguez/Documents/bagfiles/imu_data2.bag", rosbag::bagmode::Read);
 
     std::vector<std::string> topics;
     topics.push_back(std::string("/imu_data"));
@@ -45,11 +48,39 @@ int main (int argc, char** argv)
 
     allan_variance(gyro_values, gyro_allan_variance);
     
-    if (file.is_open())
-    {
-        file << "Here are the values of the gyro Allan variance x values:\n" << gyro_allan_variance.col(0) << '\n';
-        file << "Here are the values of the gyro Allan variance y values:\n" << gyro_allan_variance.col(1) << '\n';
-        file << "Here are the values of the gyro Allan variance z values:\n" << gyro_allan_variance.col(2) << '\n';
-    }
+    // if (file.is_open())
+    // {
+    //     file << "Here are the values of the gyro Allan variance x values:\n" << gyro_allan_variance.col(0) << '\n';
+    //     file << "Here are the values of the gyro Allan variance y values:\n" << gyro_allan_variance.col(1) << '\n';
+    //     file << "Here are the values of the gyro Allan variance z values:\n" << gyro_allan_variance.col(2) << '\n';
+    // }
+
+    // Plot the outputs
+
+    Eigen::VectorXf v1 = gyro_allan_variance.col(0);
+    std::vector<float> v2, t(gyro_allan_variance.rows());
+    std::iota(t.begin(), t.end(), 0);
+    float myconstant{0.005};
+    std::transform(t.begin(), t.end(), t.begin(), [&myconstant](auto& c){return c*myconstant;});
+    
+    v2.resize(v1.size());
+    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    plt::named_plot("X Axis", t, v2);
+    
+    v1 = gyro_allan_variance.col(1);    
+    v2.resize(v1.size());
+    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    plt::named_plot("Y Axis", t, v2);
+    
+    v1 = gyro_allan_variance.col(2);   
+    v2.resize(v1.size());
+    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    plt::named_plot("Z Axis", t, v2);
+
+    plt::ylabel("Allan Variance [rad^2/s^2]");
+    plt::xlabel("Time [s]");
+    plt::title("Gyroscope Allan Variance");
+    plt::legend();
+    plt::show();
     return 0;
 }

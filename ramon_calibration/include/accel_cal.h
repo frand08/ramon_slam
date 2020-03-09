@@ -44,10 +44,10 @@ struct accel_cal_functor
 
 		for (int i = 0; i < values(); i++) 
         {
-            Eigen::Vector3f xValue;                 // a_s
-            xValue << accel_values(i, 0),         // a_x
-                      accel_values(i, 1),         // a_y
-                      accel_values(i, 2);         // a_z
+            Eigen::Vector3f xValue;              	// a_s
+            xValue << accel_values(i, 0),         	// a_x
+                      accel_values(i, 1),         	// a_y
+                      accel_values(i, 2);         	// a_z
 
             float yValue = 0;                       // ||g||^2
 

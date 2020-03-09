@@ -1,18 +1,29 @@
 #include "gyro_cal.h"
 
-int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, Eigen::VectorXf &output_values)
+int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, float t_init, Eigen::VectorXf &output_values)
 {
     float g_yz, g_zy, g_zx;
     float g_xz, g_xy, g_yx;
     float sg_x, sg_y, sg_z;
-    float bg_x, bg_y, bg_z;
     float gs_x, gs_y, gs_z;
+    Eigen::Vector3f b_g;
 
-    int n = 12;             // Number of variables
+    int n = 9;              // Number of variables
     int m;
 
     gyro_cal_functor functor;
     Eigen::VectorXf x(n);   // Values to get by LM algorithm
+
+    float freq = 200;
+    int bias_counter = int(t_init * freq);
+
+    // Get bias from t_init
+    b_g.setZero();
+    for(int i = 0; i < bias_counter; i++)
+    {
+        b_g += gyro_values.row(i).transpose();
+    }
+    b_g /= bias_counter;
 
     // axis missalignments (init values)
     g_yz = 0.0;
@@ -27,12 +38,6 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
     sg_y = 1.0;
     sg_z = 1.0;
 
-    // biases (init values)
-
-    bg_x = 0.0;
-    bg_y = 0.0;
-    bg_z = 0.0;
-
     // Assign the initial values
     x(0) = g_yz;
     x(1) = g_zy;
@@ -43,9 +48,6 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
     x(6) = sg_x;
     x(7) = sg_y;
     x(8) = sg_z;
-    x(9) = bg_x;
-    x(10) = bg_y;
-    x(11) = bg_z;
 
     // Cant Data
     m = gyro_values.rows();     // Number of x values
@@ -76,21 +78,13 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
     functor.dt_factor = 2;
     functor.dt = 1 / 200;
 
+    functor.b_g = b_g;
+
     Eigen::LevenbergMarquardt<gyro_cal_functor, float> lm(functor);
     int status = lm.minimize(x);
 
-    output_values << x(0),
-                     x(1),
-                     x(2),
-                     x(3),
-                     x(4),
-                     x(5),
-                     x(6),
-                     x(7),
-                     x(8),
-                     x(9),
-                     x(10),
-                     x(11);
+    output_values << x,
+                     b_g;
                      
     // Aca ya deberia tener todos los datos, en los x...
     return 0;

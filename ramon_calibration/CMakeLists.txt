@@ -17,6 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
+find_package(PythonLibs 2.7)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -206,6 +207,9 @@ include
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 
+
+add_library(static_detector src/static_detector.cpp)
+
 add_library(allan_variance src/allan_variance.cpp)
 
 add_library(gyro_cal src/gyro_cal.cpp)
@@ -215,7 +219,9 @@ add_executable(mag_cal src/mag_cal.cpp)
 target_link_libraries(mag_cal ${catkin_LIBRARIES})
 
 add_executable(imu_cal src/imu_cal.cpp)
-target_link_libraries(imu_cal ${catkin_LIBRARIES} gyro_cal accel_cal)
+target_include_directories(imu_cal PRIVATE ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(imu_cal ${catkin_LIBRARIES} ${PYTHON_LIBRARIES} gyro_cal accel_cal static_detector)
 
 add_executable(gyro_variance src/gyro_variance.cpp)
-target_link_libraries(gyro_variance ${catkin_LIBRARIES} allan_variance)
+target_include_directories(gyro_variance PRIVATE ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(gyro_variance ${catkin_LIBRARIES} ${PYTHON_LIBRARIES} allan_variance)

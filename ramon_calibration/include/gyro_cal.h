@@ -213,4 +213,4 @@ struct gyro_cal_functor
 
 };
 
-int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, float t_init, Eigen::VectorXf &output_values);
+int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, int tinit_samples, float dt, Eigen::VectorXf &output_values);

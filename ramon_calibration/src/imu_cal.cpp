@@ -40,6 +40,7 @@ int main (int argc, char** argv)
     float data_rate;
     float t_init;
     float t_w;
+    float e_init_k;
     if(!nh.getParam("bag_file", bag_file))
     {
         ROS_ERROR("Bag file needed");
@@ -54,6 +55,10 @@ int main (int argc, char** argv)
     {
         data_rate = 0.005;
     }
+    if(!nh.getParam("e_init_k", e_init_k))
+    {
+        e_init_k = 2.0;
+    }
     if(!nh.getParam("t_init", t_init))
     {
         ROS_ERROR("Tinit needed");
@@ -67,6 +72,7 @@ int main (int argc, char** argv)
     ROS_INFO("\nBag file: %s", bag_file.c_str());
     ROS_INFO("\nTopic name: %s", topic_name.c_str());
     ROS_INFO("\nData rate: %f", data_rate);
+    ROS_INFO("\nNoise floor k: %f", e_init_k);
     ROS_INFO("\nTinit: %f", t_init);
     ROS_INFO("\ntw: %f", t_w);
 
@@ -123,7 +129,7 @@ int main (int argc, char** argv)
 
     ROS_INFO("\nStatic detector coeff init: %f", e_init);
 
-    get_static_intervals_prom(accel_values, tw_samples, e_init, points_status, static_intervals_prom);
+    get_static_intervals_prom(accel_values, tw_samples, tinit_samples, e_init, e_init_k, points_status, static_intervals_prom);
 
 
     // Plot the accelerometer values
@@ -149,7 +155,7 @@ int main (int argc, char** argv)
     v1 = points_status;   
     v2.resize(v1.size());
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
-    plt::named_plot("Static detector", t, v2, "y-");
+    plt::named_plot("Static detector", t, v2, "k-");
 
     plt::ylabel("Linear Acceleration [m/s^2]");
     plt::xlabel("Time [s]");
@@ -158,10 +164,9 @@ int main (int argc, char** argv)
     // plt::ion();
     plt::show();
 
-    /*
     ROS_INFO("Starting accel calibration...");
     // Calibrate accelerometer based on the static detections
-    accel_calibration(accel_values, output_accel_values);
+    accel_calibration(static_intervals_prom, output_accel_values);
 
     T_a << 1, -output_accel_values(0),  output_accel_values(1),
            0,           1            , -output_accel_values(2),
@@ -182,9 +187,14 @@ int main (int argc, char** argv)
     }
 
     ROS_INFO("Done.");
+    ROS_INFO("Accel data values");
+    std::cout << "T_a =\n" << T_a << std::endl;
+    std::cout << "K_a =\n" << K_a << std::endl;
+    std::cout << "b_a =\n" << b_a << std::endl;
+
     ROS_INFO("Starting gyro calibration...");
     //Calibrate gyroscope based on corrected accelerometer 
-    gyro_calibration(accel_values_corr, gyro_values, 5.0, output_gyro_values);
+    gyro_calibration(accel_values_corr, gyro_values, tinit_samples, data_rate, output_gyro_values);
 
     T_g <<   1  , -output_gyro_values(0),  output_gyro_values(1),
             output_gyro_values(3),   1  , -output_gyro_values(2),
@@ -204,13 +214,12 @@ int main (int argc, char** argv)
     }
 
     ROS_INFO("Done.");
-    ROS_INFO("Accel data values");
-    std::cout <<  output_accel_values << std::endl;
     ROS_INFO("Gyro data values");
-    std::cout <<  output_gyro_values << std::endl;
+    std::cout << "T_g =\n" << T_g << std::endl;
+    std::cout << "K_g =\n" << K_g << std::endl;
+    std::cout << "b_g =\n" << b_g << std::endl;
 
-    */
-    ROS_INFO("Calibration finished. Press any key to exit");
+    ROS_INFO("Calibration finished. Press ENTER to exit");
     getchar();
     plt::close();
 

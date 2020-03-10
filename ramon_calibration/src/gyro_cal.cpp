@@ -1,6 +1,6 @@
 #include "gyro_cal.h"
 
-int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, float t_init, Eigen::VectorXf &output_values)
+int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, int tinit_samples, float dt, Eigen::VectorXf &output_values)
 {
     float g_yz, g_zy, g_zx;
     float g_xz, g_xy, g_yx;
@@ -14,16 +14,13 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
     gyro_cal_functor functor;
     Eigen::VectorXf x(n);   // Values to get by LM algorithm
 
-    float freq = 200;
-    int bias_counter = int(t_init * freq);
-
     // Get bias from t_init
     b_g.setZero();
-    for(int i = 0; i < bias_counter; i++)
+    for(int i = 0; i < tinit_samples; i++)
     {
         b_g += gyro_values.row(i).transpose();
     }
-    b_g /= bias_counter;
+    b_g /= tinit_samples;
 
     // axis missalignments (init values)
     g_yz = 0.0;
@@ -76,7 +73,7 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
                       0;
 
     functor.dt_factor = 2;
-    functor.dt = 1 / 200;
+    functor.dt = dt;
 
     functor.b_g = b_g;
 

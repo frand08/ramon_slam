@@ -4,7 +4,7 @@
         <param name="bag_file" type="string" value="$(find ramon_calibration)/bagfiles/complete_cal.bag"/>
         <param name="topic_name" type="string" value="/imu_data"/>
         <param name="data_rate" value="0.005"/>
-        <param name="t_init" value="5.0"/>
+        <param name="t_init" value="10.0"/>
         <param name="t_w" value="1.0"/>
     </node>
 </launch>

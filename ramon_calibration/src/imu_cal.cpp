@@ -28,7 +28,10 @@ int main (int argc, char** argv)
     Eigen::Matrix3f T_a, K_a, T_g, K_g;
     Eigen::Vector3f b_a, b_g;
     Eigen::MatrixXf static_data_aux;
+    Eigen::VectorXf points_status;
     // std::ofstream file("test.txt");
+
+    Eigen::MatrixXf static_intervals_prom;
 
     ros::NodeHandle nh("~");
 
@@ -115,6 +118,14 @@ int main (int argc, char** argv)
     accel_values = accel_values / -9.80665;
 
 
+    // Get init values, based on init_samples
+    get_static_detector_coeff(accel_values.block(0,0,tinit_samples,3), e_init);
+
+    ROS_INFO("\nStatic detector coeff init: %f", e_init);
+
+    get_static_intervals_prom(accel_values, tw_samples, e_init, points_status, static_intervals_prom);
+
+
     // Plot the accelerometer values
     Eigen::VectorXf v1 = accel_values.col(0);
     std::vector<float> v2, t(accel_values.rows());
@@ -135,20 +146,20 @@ int main (int argc, char** argv)
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Z Axis", t, v2);
 
+    v1 = points_status;   
+    v2.resize(v1.size());
+    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    plt::named_plot("Static detector", t, v2, "y-");
+
     plt::ylabel("Linear Acceleration [m/s^2]");
     plt::xlabel("Time [s]");
     plt::title("Accelerometer readings");
     plt::legend();
+    // plt::ion();
     plt::show();
 
-    // Get init values, based on init_samples
-    get_static_detector_coeff(accel_values.block(0,0,tinit_samples,3), e_init);
-
-    ROS_INFO("\nStatic detector coeff init: %f", e_init);
-
-    // get_static_intervals_prom(accel_values, tw_samples, static_intervals_prom);
-
     /*
+    ROS_INFO("Starting accel calibration...");
     // Calibrate accelerometer based on the static detections
     accel_calibration(accel_values, output_accel_values);
 
@@ -170,6 +181,8 @@ int main (int argc, char** argv)
         accel_values_corr.row(i) = (T_a * K_a * (accel_values.row(i).transpose() + b_a)).transpose();
     }
 
+    ROS_INFO("Done.");
+    ROS_INFO("Starting gyro calibration...");
     //Calibrate gyroscope based on corrected accelerometer 
     gyro_calibration(accel_values_corr, gyro_values, 5.0, output_gyro_values);
 
@@ -190,11 +203,16 @@ int main (int argc, char** argv)
         gyro_values_corr.row(i) = (T_g * K_g * (gyro_values.row(i).transpose() + b_g)).transpose();
     }
 
-    std::cout << "Accel data values" << std::endl;
+    ROS_INFO("Done.");
+    ROS_INFO("Accel data values");
     std::cout <<  output_accel_values << std::endl;
-    std::cout << "Gyro data values" << std::endl;
+    ROS_INFO("Gyro data values");
     std::cout <<  output_gyro_values << std::endl;
+
     */
+    ROS_INFO("Calibration finished. Press any key to exit");
+    getchar();
+    plt::close();
 
     return 0;
 }

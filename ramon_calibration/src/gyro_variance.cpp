@@ -1,5 +1,4 @@
 #include <iostream>
-#include <fstream>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <rosbag/bag.h>
@@ -21,7 +20,6 @@ int main (int argc, char** argv)
     ros::init (argc, argv, "gyro_variance");  
     rosbag::Bag bag;
 	Eigen::MatrixXf gyro_values, gyro_allan_variance;
-    std::ofstream file("test.txt");
   
     bag.open("/home/fdominguez/Documents/bagfiles/imu_data2.bag", rosbag::bagmode::Read);
 
@@ -48,13 +46,6 @@ int main (int argc, char** argv)
 
     allan_variance(gyro_values, gyro_allan_variance);
     
-    // if (file.is_open())
-    // {
-    //     file << "Here are the values of the gyro Allan variance x values:\n" << gyro_allan_variance.col(0) << '\n';
-    //     file << "Here are the values of the gyro Allan variance y values:\n" << gyro_allan_variance.col(1) << '\n';
-    //     file << "Here are the values of the gyro Allan variance z values:\n" << gyro_allan_variance.col(2) << '\n';
-    // }
-
     // Plot the outputs
 
     Eigen::VectorXf v1 = gyro_allan_variance.col(0);
@@ -81,6 +72,12 @@ int main (int argc, char** argv)
     plt::xlabel("Time [s]");
     plt::title("Gyroscope Allan Variance");
     plt::legend();
+    plt::ion();
     plt::show();
+
+    ROS_INFO("Allan Variance calculation finished. Press any key to exit");
+    getchar();
+    plt::close();
+
     return 0;
 }

@@ -45,6 +45,6 @@
 	<node name="dynamic_reconfigure_load" pkg="dynamic_reconfigure" type="dynparam" args="load /stereo/stereo_image_proc $(arg camera_params_url)" />
 
 	<!-- Visualize data -->
-	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find ramon_slam3d)/rviz/minoru_camera.rviz" />
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find ramon_slam3d)/rviz/stereo_camera.rviz" />
 </launch>
 

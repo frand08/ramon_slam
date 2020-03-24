@@ -30,10 +30,10 @@
 		<param name="right/rotate"			type="bool" 	value="false" />
 
 		<!-- general params -->
-		<param name="fps"               	type="int"    	value="$(arg fps)"/>
-		<param name="width"			    	type="int"		value="$(arg image_width)"/>
-		<param name="height"				type="int"		value="$(arg image_height)"/>
-		<param name="skip_frames"        	type="int"		value="$(arg skip_frames)" />
+		<param name="fps"               	value="$(arg fps)"/>
+		<param name="width"			    	value="$(arg image_width)"/>
+		<param name="height"				value="$(arg image_height)"/>
+		<param name="skip_frames"        	value="$(arg skip_frames)" />
 		<!-- <param name="frame_id"	        	type="string"	value="$(arg frame_id)" /> -->
 	</node>
 

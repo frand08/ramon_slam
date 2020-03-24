@@ -13,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
   tf
 )
 
+find_package(OpenCV REQUIRED)
+
 # No se por que se caga con esto el make
 # generate_messages(DEPENDENCIES std_msgs)
 
@@ -28,3 +30,6 @@ include_directories(
 include
   ${catkin_INCLUDE_DIRS}
 )
+
+add_executable(disparity src/disparity.cpp)
+target_link_libraries(disparity ${catkin_LIBRARIES} ${OpenCV_LIBS})

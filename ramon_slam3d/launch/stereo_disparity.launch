@@ -1,0 +1,8 @@
+<launch>
+    <group ns="right_camera" >
+        <rosparam file="$(find ramon_slam3d)/info/minoru_camera_info/20200318_320x240/right_camera.yaml" />
+    </group>
+	<node name="test" pkg="ramon_slam3d" type="disparity" output="screen" >
+        <param name="camera_params_loc" value="file://$(find ramon_slam3d)/info/minoru_camera_info/20200318_320x240/right_camera.yaml" />
+    </node>
+</launch>

@@ -1,6 +1,13 @@
 <!-- ramon_slam3d_examples.launch -->
 <launch>
-	<arg name="camera_cal_loc"		value="minoru_camera_info/20200318_320x240" />
+	<arg name="date"				default="20200318" />
+	<arg name="img_width"			default="320" />
+	<arg name="img_height"			default="240" />
+	<arg name="rate"				default="30.0" />
+	<arg name="left_dev"			default="/dev/video4" />
+	<arg name="right_dev"			default="/dev/video2" />
+
+	<arg name="camera_cal_loc"		value="minoru_camera_info/$(arg date)_$(arg img_width)x$(arg img_height)" />
 	<arg name="camera_params_loc"	value="minoru_camera_params/2020XXXX_640x480" />
 	<arg name="camera_params_url"	value="$(find ramon_slam3d)/params/$(arg camera_params_loc)/stereo_camera_params.yaml" />
 
@@ -18,14 +25,15 @@
 			<arg name="left_camera_dev"		value="/dev/video4" />
 
 			<!-- Set camera location -->
-			<arg name="camera_cal_loc" 		value="$(arg amera_cal_loc)" />
-
-			<!-- set image size -->
-			<arg name="image_width"			value="320" />
-			<arg name="image_height"		value="240" />
+			<arg name="stereo_camera_loc" 	value="$(arg camera_cal_loc)" />
 
 			<!-- set camera parameters -->
-			<arg name="fps"					value="30" />
+			<!-- set image size -->
+			<arg name="image_width"			value="img_width" />
+			<arg name="image_height"		value="img_height" />
+			
+			<!-- set image rate -->
+			<arg name="fps"					value="rate" />
 		</include>
 
 		<!-- Run the ROS package stereo_image_proc for image rectification -->

@@ -21,7 +21,7 @@
 			<arg name="left_camera_dev"		value="/dev/video4" />
 
 			<!-- Set camera location -->
-			<arg name="camera_cal_loc" 		value=" " />
+			<arg name="stereo_camera_loc" 	value="minoru_camera_info/20200318_320x240" />
 
 			<!-- set image size -->
 			<arg name="image_width"			value="$(arg width)" />

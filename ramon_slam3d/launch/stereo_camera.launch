@@ -1,4 +1,4 @@
-<!-- minoru_camera.launch -->
+<!-- stereo_camera.launch -->
 <launch>
 
 	<!-- set left/right camera device and calibration url -->

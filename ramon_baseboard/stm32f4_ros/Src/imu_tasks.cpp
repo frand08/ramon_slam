@@ -1,7 +1,7 @@
 #include <ros.h>
 #include "MPU9250.h"
 #include <sensor_msgs/Imu.h>
-#include <sensor_msgs/MagneticField.h>
+#include <ramon_calibration/ImuWithMag.h>
 #include "cmsis_os.h"
 #include "stm32f4xx_hal.h"
 #include "mainpp.h"
@@ -9,7 +9,7 @@
 extern I2C_HandleTypeDef hi2c1;
 
 extern osThreadId MPU9250TaskHandle;
-extern osThreadId MagnetometerTaskHandle;
+extern osThreadId IMUWithMagnetometerTaskHandle;
 
 extern osMessageQId IMUQueueHandle;
 
@@ -78,6 +78,7 @@ void StartMPU9250Task(void const * argument)
 	//RMS = MEAN² + VAR, con VAR = SIGMA² -> Como es de ruido : MEAN = 0
 	//Esto ya es a 1 sigma ya que asi se define a la varianza
 
+	/* FIXME: Revisar valores de covarianzas, sobre todo los factores que se multiplican, si son necesarios o no*/
 	//Quiero que este en rad/s
 	imu_send->angular_velocity_covariance[0] = 0.1f*PI/180.0f;
 	imu_send->angular_velocity_covariance[1] = 0;
@@ -194,22 +195,83 @@ void StartMPU9250Task(void const * argument)
 	}
 }
 
-void StartMagnetometerTask(void const * argument)
+void StartIMUWithMagnetometerTask(void const * argument)
 {
-	c_MPU9250 mpu9250(&HAL_Delay,&i2c_read_bytes,&i2c_write_bytes);
-	osEvent event;
-	sensor_msgs::MagneticField *mag;
-	mag_data_t mag_data;
-//	int16_t mag_raw[3];
+	ramon_calibration::ImuWithMag *imuwithmag_send;
 
-	mag = (sensor_msgs::MagneticField *) argument;
-	mag->header.frame_id = "mag_data";
+	accel_data accel;
+	gyro_data gyro;
+	mag_data mag;
+	float temp;
+
+	osEvent event;
+
+	MPU9250_params params;
+	params.accel_scale = c_MPU9250::E_ACC_SCALE::AFS_16G;
+	params.gyro_scale = c_MPU9250::E_GYRO_SCALE::GFS_250DPS;
+	params.mag_scale = c_MPU9250::E_MAG_SCALE::MFS_16BITS;
+	params.mag_mode = c_MPU9250::E_MAG_HZ::MFREQ_100HZ;
+
+	params.delay_ms = &HAL_Delay;
+	params.read_bytes = &i2c_read_bytes;
+	params.write_bytes = &i2c_write_bytes;
+
+	c_MPU9250 mpu9250(params);
+
+
+	imuwithmag_send = (ramon_calibration::ImuWithMag *) argument;
 
 	if(!mpu9250.init())
 	{
 		HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_SET);
-		osThreadTerminate(MagnetometerTaskHandle);
+		osThreadTerminate(IMUWithMagnetometerTaskHandle);
 	}
+
+	HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_RESET);
+	//Covarianzas: Se toman solo las varianzas (xx,yy,zz), las covarianzas son despreciadas
+
+	//Total RMS Noise del gyro = 0.1 º/s-rms (Datasheet)
+	//RMS = MEAN² + VAR, con VAR = SIGMA² -> Como es de ruido : MEAN = 0
+	//Esto ya es a 1 sigma ya que asi se define a la varianza
+
+	/* FIXME: Revisar valores de covarianzas, sobre todo los factores que se multiplican, si son necesarios o no*/
+	//Quiero que este en rad/s
+	imuwithmag_send->angular_velocity_covariance[0] = 0.1f*PI/180.0f;
+	imuwithmag_send->angular_velocity_covariance[1] = 0;
+	imuwithmag_send->angular_velocity_covariance[2] = 0;
+	imuwithmag_send->angular_velocity_covariance[3] = 0;
+	imuwithmag_send->angular_velocity_covariance[4] = 0.1f*PI/180.0f;
+	imuwithmag_send->angular_velocity_covariance[5] = 0;
+	imuwithmag_send->angular_velocity_covariance[6] = 0;
+	imuwithmag_send->angular_velocity_covariance[7] = 0;
+	imuwithmag_send->angular_velocity_covariance[8] = 0.1f*PI/180.0f;
+
+	//Total RMS Noise del acc = 8 mg-rms (Datasheet)
+	//RMS = MEAN² + VAR, con VAR = SIGMA² -> Como es de ruido : MEAN = 0
+	//Esto ya es a 1 sigma ya que asi se define a la varianza
+
+	//Quiero que este en m/s²
+	imuwithmag_send->linear_acceleration_covariance[0] = 0.008f*GRAVITY;
+	imuwithmag_send->linear_acceleration_covariance[1] = 0;
+	imuwithmag_send->linear_acceleration_covariance[2] = 0;
+	imuwithmag_send->linear_acceleration_covariance[3] = 0;
+	imuwithmag_send->linear_acceleration_covariance[4] = 0.008f*GRAVITY;
+	imuwithmag_send->linear_acceleration_covariance[5] = 0;
+	imuwithmag_send->linear_acceleration_covariance[6] = 0;
+	imuwithmag_send->linear_acceleration_covariance[7] = 0;
+	imuwithmag_send->linear_acceleration_covariance[8] = 0.008f*GRAVITY;
+
+	// Magnetometer covariance
+	/* TODO: define mag covariance */
+	imuwithmag_send->magnetic_field_covariance[0] = 1;
+	imuwithmag_send->magnetic_field_covariance[1] = 0;
+	imuwithmag_send->magnetic_field_covariance[2] = 0;
+	imuwithmag_send->magnetic_field_covariance[3] = 0;
+	imuwithmag_send->magnetic_field_covariance[4] = 1;
+	imuwithmag_send->magnetic_field_covariance[5] = 0;
+	imuwithmag_send->magnetic_field_covariance[6] = 0;
+	imuwithmag_send->magnetic_field_covariance[7] = 0;
+	imuwithmag_send->magnetic_field_covariance[8] = 1;
 
 	osDelay(1000);
 	for(;;)
@@ -217,23 +279,37 @@ void StartMagnetometerTask(void const * argument)
 			event = osMessageGet(IMUQueueHandle,osWaitForever);
 			if(event.status == osEventMessage)
 			{
-				// Update ROS time
-				mag->header.stamp.sec = nh.now().sec;
-				mag->header.stamp.nsec = nh.now().nsec;
+				if(nh.connected())
+				{
+					// Update ROS time
+					imuwithmag_send->header.stamp.sec = nh.now().sec;
+					imuwithmag_send->header.stamp.nsec = nh.now().nsec;
+				}
+				// Esta en NED tomando ref del magnetometro
 
-//				mpu9250.read_mag_data_raw(mag_raw);
-//				mag->magnetic_field.x = (float)mag_raw[0];
-//				mag->magnetic_field.y = (float)mag_raw[1];
-//				mag->magnetic_field.z = (float)mag_raw[2];
-				mpu9250.read_mag_data(mag_data);
-				mag->magnetic_field.x = (float)mag_data.x;
-				mag->magnetic_field.y = (float)mag_data.y;
-				mag->magnetic_field.z = (float)mag_data.z;
+				mpu9250.read_accel_data(accel);  // Read the x/y/z adc values
+				mpu9250.read_gyro_data(gyro);  // Read the x/y/z adc values
+				mpu9250.read_mag_data(mag);  // Read the x/y/z adc values
+				mpu9250.read_temp_data(temp);  // Read the adc values
+
+				/* uncalibrated linear_acceleration in m/s^2 */
+				imuwithmag_send->linear_acceleration.x = accel.x*GRAVITY;
+				imuwithmag_send->linear_acceleration.y = accel.y*GRAVITY;
+				imuwithmag_send->linear_acceleration.z = accel.z*GRAVITY;
+
+				/* uncalibrated angular velocity to rad/sec */
+				imuwithmag_send->angular_velocity.x = gyro.x*PI/180.0f;
+				imuwithmag_send->angular_velocity.y = gyro.y*PI/180.0f;
+				imuwithmag_send->angular_velocity.z = gyro.z*PI/180.0f;
+
+				/* uncalibrated magnetic_field in Tesla */
+				/* 1 miliGauss = 1e-7 Tesla */
+				imuwithmag_send->magnetic_field.x = mag.x / 10000000;
+				imuwithmag_send->magnetic_field.y = mag.y / 10000000;
+				imuwithmag_send->magnetic_field.z = mag.z / 10000000;
+
+				/* Send message */
 				osMessagePut(PublishQueueHandle,2,0);
 			}
-		else
-		{
-			osDelay(1);
-		}
 	}
 }

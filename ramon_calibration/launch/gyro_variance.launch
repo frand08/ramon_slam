@@ -1,0 +1,10 @@
+<launch>
+    <!-- run sweep_node node -->
+    <node name="gyro_variance" pkg="ramon_calibration" type="gyro_variance" output="screen">
+        <param name="bag_file" type="string" value="$(find ramon_calibration)/bagfiles/imu_data3.bag"/>
+        <param name="topic_name" type="string" value="/imu_data"/>
+        <param name="data_rate" value="0.005"/>
+    </node>
+</launch>
+
+

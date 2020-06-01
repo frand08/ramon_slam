@@ -322,10 +322,13 @@ class c_MPU9250
 		void mahony_quaternion_update(float ax, float ay, float az, float gx, float gy, float gz, float mx, float my, float mz, float *q, float);
 
 		void read_accel_data(accel_data &);
+		void read_accel_data_uncalibrated(accel_data &);
 		void read_accel_data_raw(int16_t *rawData);
 		void read_gyro_data(gyro_data &);
+		void read_gyro_data_uncalibrated(gyro_data &);
 		void read_gyro_data_raw(int16_t *rawData);
 		void read_mag_data(mag_data &);
+		void read_mag_data_uncalibrated(mag_data &);
 		int read_mag_data_raw(int16_t *rawData);
 		void read_temp_data(float &);
 		void read_temp_data_raw(int16_t *rawData);

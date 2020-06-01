@@ -124,11 +124,12 @@ int main (int argc, char** argv)
     accel_values = accel_values / -9.80665;
 
 
-    // Get init values, based on init_samples
+    // Get static detector init value, based on init_samples
     get_static_detector_coeff(accel_values.block(0,0,tinit_samples,3), e_init);
 
     ROS_INFO("\nStatic detector coeff init: %f", e_init);
 
+    // Get averaged static intervals
     get_static_intervals_prom(accel_values, tw_samples, tinit_samples, e_init, e_init_k, points_status, static_intervals_prom);
 
 
@@ -136,35 +137,36 @@ int main (int argc, char** argv)
     Eigen::VectorXf v1 = accel_values.col(0);
     std::vector<float> v2, t(accel_values.rows());
     std::iota(t.begin(), t.end(), 0);
-    float myconstant{0.005};
-    std::transform(t.begin(), t.end(), t.begin(), [&myconstant](auto& c){return c*myconstant;});
+
+    std::transform(t.begin(), t.end(), t.begin(), [&data_rate](auto& c){return c*data_rate;});
     v2.resize(v1.size());
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
-    plt::named_plot("X Axis", t, v2);
+    plt::named_plot("Eje x", t, v2);
     
     v1 = accel_values.col(1);    
     v2.resize(v1.size());
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
-    plt::named_plot("Y Axis", t, v2);
+    plt::named_plot("Eje y", t, v2);
     
     v1 = accel_values.col(2);   
     v2.resize(v1.size());
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
-    plt::named_plot("Z Axis", t, v2);
+    plt::named_plot("Eje z", t, v2);
 
     v1 = points_status;   
     v2.resize(v1.size());
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
-    plt::named_plot("Static detector", t, v2, "k-");
+    plt::named_plot("Detector estatico", t, v2, "k-");
 
-    plt::ylabel("Linear Acceleration [m/s^2]");
-    plt::xlabel("Time [s]");
-    plt::title("Accelerometer readings");
+    plt::ylabel("Aceleracion lineal [m/s^2]");
+    plt::xlabel("Tiempo [s]");
+    // plt::title("Lecturas del acelerometro");
     plt::legend();
     // plt::ion();
     plt::show();
 
     ROS_INFO("Starting accel calibration...");
+
     // Calibrate accelerometer based on the static detections
     accel_calibration(static_intervals_prom, output_accel_values);
 
@@ -193,6 +195,7 @@ int main (int argc, char** argv)
     std::cout << "b_a =\n" << b_a << std::endl;
 
     ROS_INFO("Starting gyro calibration...");
+    
     //Calibrate gyroscope based on corrected accelerometer 
     gyro_calibration(accel_values_corr, gyro_values, tinit_samples, data_rate, output_gyro_values);
 

@@ -5,8 +5,12 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
     float g_yz, g_zy, g_zx;
     float g_xz, g_xy, g_yx;
     float sg_x, sg_y, sg_z;
-    float gs_x, gs_y, gs_z;
     Eigen::Vector3f b_g;
+    Eigen::Vector3f gyro_measnoise;
+
+    // Datasheet value, needed if data is not averaged
+    // float meas_noise = sqrt(0.1);
+    float meas_noise = 0.0;
 
     int n = 9;              // Number of variables
     int m;
@@ -21,6 +25,10 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
         b_g += gyro_values.row(i).transpose();
     }
     b_g /= tinit_samples;
+
+    gyro_measnoise << meas_noise,
+                      meas_noise,
+                      meas_noise;
 
     // axis missalignments (init values)
     g_yz = 0.0;
@@ -55,6 +63,7 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
     functor.m = m;
     functor.n = n;
 
+    // Load params respect to Runge-Kutta 4th order method
     functor.c1 = 0;
     functor.c2 = 0.5;
     functor.c3 = 0.5;
@@ -76,6 +85,8 @@ int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, 
     functor.dt = dt;
 
     functor.b_g = b_g;
+
+    functor.gyro_measnoise = gyro_measnoise;
 
     Eigen::LevenbergMarquardt<gyro_cal_functor, float> lm(functor);
     int status = lm.minimize(x);

@@ -20,8 +20,29 @@ int main (int argc, char** argv)
     ros::init (argc, argv, "gyro_variance");  
     rosbag::Bag bag;
 	Eigen::MatrixXf gyro_values, gyro_allan_variance;
-  
-    bag.open("/home/fdominguez/Documents/bagfiles/imu_data2.bag", rosbag::bagmode::Read);
+
+    ros::NodeHandle nh("~");
+
+    std::string bag_file;
+    std::string topic_name;
+    float data_rate;
+
+    if(!nh.getParam("bag_file", bag_file))
+    {
+        ROS_ERROR("Bag file needed");
+        return -1;
+    }
+    if(!nh.getParam("topic_name", topic_name))
+    {
+        ROS_ERROR("Topic name needed");
+        return -1;
+    }    
+    if(!nh.getParam("data_rate", data_rate))
+    {
+        data_rate = 0.005;
+    }
+
+    bag.open(bag_file, rosbag::bagmode::Read);
 
     std::vector<std::string> topics;
     topics.push_back(std::string("/imu_data"));
@@ -51,28 +72,28 @@ int main (int argc, char** argv)
     Eigen::VectorXf v1 = gyro_allan_variance.col(0);
     std::vector<float> v2, t(gyro_allan_variance.rows());
     std::iota(t.begin(), t.end(), 0);
-    float myconstant{0.005};
-    std::transform(t.begin(), t.end(), t.begin(), [&myconstant](auto& c){return c*myconstant;});
+
+    std::transform(t.begin(), t.end(), t.begin(), [&data_rate](auto& c){return c*data_rate;});
     
     v2.resize(v1.size());
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
-    plt::named_plot("X Axis", t, v2);
+    plt::named_plot("Eje x", t, v2);
     
     v1 = gyro_allan_variance.col(1);    
     v2.resize(v1.size());
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
-    plt::named_plot("Y Axis", t, v2);
+    plt::named_plot("Eje y", t, v2);
     
     v1 = gyro_allan_variance.col(2);   
     v2.resize(v1.size());
     Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
-    plt::named_plot("Z Axis", t, v2);
+    plt::named_plot("Eje z", t, v2);
 
-    plt::ylabel("Allan Variance [rad^2/s^2]");
-    plt::xlabel("Time [s]");
-    plt::title("Gyroscope Allan Variance");
+    plt::ylabel("Varianza de Allan [rad^2/s^2]");
+    plt::xlabel("Tiempo [s]");
+    // plt::title("Varianza de Allan de los datos del giroscopio");
     plt::legend();
-    plt::ion();
+    // plt::ion();
     plt::show();
 
     ROS_INFO("Allan Variance calculation finished. Press any key to exit");

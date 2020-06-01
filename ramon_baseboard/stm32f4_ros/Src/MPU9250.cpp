@@ -410,6 +410,21 @@ void c_MPU9250::read_mag_data(mag_data &mag)
 	}
 }
 
+
+void c_MPU9250::read_mag_data_uncalibrated(mag_data &mag)
+{
+
+	int16_t data[3];
+
+	if(this->read_mag_data_raw(data) >= 0)
+	{
+		// Mag in miliGauss
+		mag.x = (float)data[0]*this->f_get_mag_res();	// get actual magnetometer value, this depends on scale being set
+		mag.y = (float)data[1]*this->f_get_mag_res();
+		mag.z = (float)data[2]*this->f_get_mag_res();
+	}
+}
+
 int c_MPU9250::read_mag_data_raw(int16_t *rawData)
 {
 	uint8_t c, auxData[7];

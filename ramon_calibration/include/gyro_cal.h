@@ -15,6 +15,7 @@ struct gyro_cal_functor
     float dt_factor, dt;
     float c1, c2, c3, c4;
     float a21, a31, a41, a32, a42, a43;
+	Eigen::Vector3f gyro_measnoise;
 
 	// Compute 'm' errors, one for each data point, for the given parameter values in 'x'
 	int operator()(const Eigen::VectorXf &x, Eigen::VectorXf &fvec) const
@@ -59,16 +60,21 @@ struct gyro_cal_functor
 
         yValue = 0;
 
+		// Set gravity versor initial value to [0 0 g]
 		gravity_versor << 0,
 						  0,
 						  1;
 
+		// Set the first accel value as the gravity init value
+		// gravity_versor << accel_values(0,0),
+		// 				  accel_values(0,1),
+		// 				  accel_values(0,2);
 		qk = q_init;
 		
 		// RK4n needs intermediate values, so we set the 
 		// dt = dt_real * 2 --> dt_factor = 2
 		// for (int i = 0; i < values(); i+=2) 
-		for (int i = 0; i < values(); i+=2)
+		for (int i = 1; i < values(); i+=2)
         {
 			if(i+dt_factor >= values())
 				break;
@@ -94,17 +100,18 @@ struct gyro_cal_functor
             // For each step, normalize the (k+1)-th quaternion:
             // qk+1_norm = qk+1 / ||qk+1||
 
-			//k1
-			q1 = qk;
-
             xValue << gyro_values(int(i + c1 * dt_factor), 0),         // w_x
                       gyro_values(int(i + c1 * dt_factor), 1),         // w_y
                       gyro_values(int(i + c1 * dt_factor), 2);         // w_z
-			w_o = T_g * K_g * (xValue + b_g);
+			// w_o = T_g * K_g * (xValue + b_g);
+			w_o = T_g * K_g * (xValue + b_g + gyro_measnoise);
 			omega <<   0   , -w_o(0), -w_o(1), -w_o(2),
 					 w_o(0),    0   ,  w_o(2), -w_o(1),
 					 w_o(1), -w_o(2),    0   , 	w_o(0),
 					 w_o(2),  w_o(1), -w_o(0),    0   ;
+
+			//k1
+			q1 = qk;					 
 			k1 = 0.5 * omega * q1;
 
 			//k2
@@ -148,7 +155,11 @@ struct gyro_cal_functor
 
             qk_1 = qk + dt * dt_factor * (k1 / 6 + k2 / 3 + k3 / 3 + k4 / 6);
 
-			// Apply 3D rotation to gravity versor (0 0 1)
+            qk_1 = qk_1 / qk_1.norm();
+
+            qk = qk_1;
+
+			// Apply 3D rotation to gravity versor
 			quat.w() = qk_1(0);
 			quat.x() = qk_1(1);
 			quat.y() = qk_1(2);
@@ -156,12 +167,12 @@ struct gyro_cal_functor
 
 			// cost fnc -> ||ua_k - ug_k||^2 = yValue = 0
 			ug_k_1 = quat.normalized().toRotationMatrix() * gravity_versor;
-            // fvec(i) = yValue - (accel_values.row(i+dt_factor).transpose() - ug_k_1).squaredNorm();
-            fvec(i) = (accel_values.row(i+dt_factor).transpose() - ug_k_1).squaredNorm();
+			/* FIXME: Check if the gravity versor must be updated or not */
+			// Update gravity versor
+			// gravity_versor = ug_k_1;
 
-            qk_1 = qk_1 / qk_1.norm();
+            fvec(i) = yValue - (accel_values.row(i+dt_factor).transpose() - ug_k_1).squaredNorm();
 
-            qk = qk_1;
 		}
 		return 0;
 	}

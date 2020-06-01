@@ -41,3 +41,13 @@ extern "C" {
 #ifdef __cplusplus
 }
 #endif
+
+
+// En caso de querer calibrar la IMU completa uso este define, sino es modo normal
+//#define IMU_CALIBRATION
+
+// Para publicar o subscribir los topics cuando corresponda
+
+//#define GPS_DATA_SEND
+
+//#define MOVEMENT_DATA_RECEIVE

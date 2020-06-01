@@ -4,33 +4,29 @@
 #include <std_msgs/String.h>
 #include <sensor_msgs/NavSatFix.h>
 #include <sensor_msgs/Imu.h>
-#include <sensor_msgs/MagneticField.h>
+#include <ramon_calibration/ImuWithMag.h>
 #include <string>
 //#include <nmea_msgs/Sentence.h>
 #include <sstream>
 
 #include "cmsis_os.h"
 
-// En caso de querer calibrar el magnetometro unicamente uso este define, sino es modo normal
-//#define MAG_CALIBRATION
-
-#ifdef MAG_CALIBRATION
-void StartMagnetometerTask(void const * argument);
-#else
 void StartMPU9250Task(void const * argument);
-void StartGPSTask(void const * argument);
-void StartMovementTask(void const * argument);
-void movementCallback(const std_msgs::String& mov);
+
+#ifdef IMU_CALIBRATION
+void StartIMUWithMagnetometerTask(void const * argument);
 #endif
 
+void StartGPSTask(void const * argument);
+
+void StartMovementTask(void const * argument);
+void movementCallback(const std_msgs::String& mov);
+
 extern osMessageQId PublishQueueHandle;
-#ifdef MAG_CALIBRATION
-extern osThreadId MagnetometerTaskHandle;
-#else
+extern osThreadId IMUWithMagnetometerTaskHandle;
 extern osThreadId GPSTaskHandle;
 extern osThreadId MovementTaskHandle;
 extern osThreadId MPU9250TaskHandle;
-#endif
 
 /* Node creation */
 ros::NodeHandle nh;
@@ -41,68 +37,79 @@ extern "C"
 	{
 		osEvent event;
 
-		/* Magnetometer publisher */
-		sensor_msgs::MagneticField magnetometer;
-		ros::Publisher pub_mag("mag_data",&magnetometer);
+	/** Messages and tasks **/
 
 		/* IMU publisher */
 		sensor_msgs::Imu imu;
 		ros::Publisher pub_imu("imu_data",&imu);
 
-		/* GPS publisher */
-		sensor_msgs::NavSatFix gps;
-		ros::Publisher pub_gps("gps_fix",&gps);
-
-	#ifdef MAG_CALIBRATION
-		/* Definition of magnetometer_task */
-		const osThreadDef_t os_thread_def_magnetometer_task = \
-		{ (char*)"magnetometer_task", StartMagnetometerTask, osPriorityNormal, 0, 256};
-
-	#else
-		/* Movement subscriber */
-		ros::Subscriber<std_msgs::String> sub_movement("move", &movementCallback);
-
 		/* Definition of mpu9250_task */
 		const osThreadDef_t os_thread_def_mpu9250_task = \
 		{ (char*)"mpu9250_task", StartMPU9250Task, osPriorityNormal, 0, 256};
+
+		/* IMU calibration publisher */
+		ramon_calibration::ImuWithMag imu_mag;
+		ros::Publisher pub_imumag("imu_cal_data",&imu_mag);
+
+		/* Definition of magnetometer_task */
+		const osThreadDef_t os_thread_def_imuwithmagnetometer_task = \
+		{ (char*)"magnetometer_task", StartIMUWithMagnetometerTask, osPriorityNormal, 0, 256};
+
+		/* GPS publisher */
+		sensor_msgs::NavSatFix gps;
+		ros::Publisher pub_gps("gps_fix",&gps);
 
 		/* Definition of gps_task */
 		const osThreadDef_t os_thread_def_gps_task = \
 		{ (char*)"mpu9250_task", StartGPSTask, osPriorityNormal, 0, 256};
 
+		/* Movement subscriber */
+		ros::Subscriber<std_msgs::String> sub_movement("move", &movementCallback);
 
 		/* Definition of movement_task */
 		const osThreadDef_t os_thread_def_movement_task = \
 		{ (char*)"movement_task", StartMovementTask, osPriorityNormal, 0, 256};
-		#endif
+
+	/** Node init + advertise/subscribe **/
 
 		nh.initNode();
 
-	#ifdef MAG_CALIBRATION
-		nh.advertise(pub_mag);
-
-	#else
+#	ifndef IMU_CALIBRATION
 		nh.advertise(pub_imu);
-//		nh.advertise(pub_gps);
+#	else
+		nh.advertise(pub_imumag);
+#	endif
+
+#	ifdef GPS_DATA_SEND
+		nh.advertise(pub_gps);
+#	endif
+
+#	ifdef MOVEMENT_DATA_RECEIVE
 		nh.subscribe(sub_movement);
-	#endif
+#	endif
+	/** Creation of tasks **/
 
-	#ifdef MAG_CALIBRATION
-		/* Creation of magnetometer_task */
-		MagnetometerTaskHandle = osThreadCreate(&os_thread_def_magnetometer_task, (void*)&magnetometer);
-
-	#else
+#	ifndef IMU_CALIBRATION
 		/* Creation of mpu9250_task */
 		MPU9250TaskHandle = osThreadCreate(&os_thread_def_mpu9250_task, (void*)&imu);
+#	else
+		/* Creation of imuwithmagnetometer task */
+		IMUWithMagnetometerTaskHandle = osThreadCreate(&os_thread_def_imuwithmagnetometer_task, (void*)&imu_mag);
+#	endif
 
+#	ifdef GPS_DATA_SEND
 		/* Creation of gps_task */
 		GPSTaskHandle = osThreadCreate(&os_thread_def_gps_task, (void*)&gps);
+#	endif
 
-		/* Creation of gps_task */
+#	ifdef MOVEMENT_DATA_RECEIVE
+		/* Creation of movement_task */
 		MovementTaskHandle = osThreadCreate(&os_thread_def_movement_task, NULL);
+#	endif
 
-	#endif
 		HAL_GPIO_WritePin(LD0_GPIO_Port,LD0_Pin,GPIO_PIN_RESET);
+
+	/** Loop **/
 
 		for(;;)
 		{
@@ -114,7 +121,7 @@ extern "C"
 				{
 					switch(event.value.v)
 					{
-						/* IMU */
+						/* IMU message */
 						case 0:
 							pub_imu.publish(&imu);
 							break;
@@ -124,9 +131,9 @@ extern "C"
 							pub_gps.publish(&gps);
 							break;
 
-						/* Magnetometer */
+						/* MPU9250 calibration */
 						case 2:
-							pub_mag.publish(&magnetometer);
+							pub_imumag.publish(&imu_mag);
 							break;
 
 						default:

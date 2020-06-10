@@ -9,7 +9,7 @@
 extern I2C_HandleTypeDef hi2c1;
 
 extern osThreadId MPU9250TaskHandle;
-extern osThreadId IMUWithMagnetometerTaskHandle;
+extern osThreadId IMUCalibrationTaskHandle;
 
 extern osMessageQId IMUQueueHandle;
 
@@ -45,7 +45,7 @@ void StartMPU9250Task(void const * argument)
 	float GyroMeasError = PI * (60.0f / 180.0f);     // gyroscope measurement error in rads/s (start at 60 deg/s), then reduce after ~10 s to 3
 
 	MPU9250_params params;
-	params.accel_scale = c_MPU9250::E_ACC_SCALE::AFS_16G;
+	params.accel_scale = c_MPU9250::E_ACC_SCALE::AFS_2G;
 	params.gyro_scale = c_MPU9250::E_GYRO_SCALE::GFS_250DPS;
 	params.mag_scale = c_MPU9250::E_MAG_SCALE::MFS_16BITS;
 	params.mag_mode = c_MPU9250::E_MAG_HZ::MFREQ_100HZ;
@@ -195,9 +195,9 @@ void StartMPU9250Task(void const * argument)
 	}
 }
 
-void StartIMUWithMagnetometerTask(void const * argument)
+void StartIMUCalibrationTask(void const * argument)
 {
-	ramon_calibration::ImuWithMag *imuwithmag_send;
+	ramon_calibration::ImuWithMag *imucal_send;
 
 	accel_data accel;
 	gyro_data gyro;
@@ -207,7 +207,7 @@ void StartIMUWithMagnetometerTask(void const * argument)
 	osEvent event;
 
 	MPU9250_params params;
-	params.accel_scale = c_MPU9250::E_ACC_SCALE::AFS_16G;
+	params.accel_scale = c_MPU9250::E_ACC_SCALE::AFS_2G;
 	params.gyro_scale = c_MPU9250::E_GYRO_SCALE::GFS_250DPS;
 	params.mag_scale = c_MPU9250::E_MAG_SCALE::MFS_16BITS;
 	params.mag_mode = c_MPU9250::E_MAG_HZ::MFREQ_100HZ;
@@ -219,12 +219,12 @@ void StartIMUWithMagnetometerTask(void const * argument)
 	c_MPU9250 mpu9250(params);
 
 
-	imuwithmag_send = (ramon_calibration::ImuWithMag *) argument;
+	imucal_send = (ramon_calibration::ImuWithMag *) argument;
 
 	if(!mpu9250.init())
 	{
 		HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_SET);
-		osThreadTerminate(IMUWithMagnetometerTaskHandle);
+		osThreadTerminate(IMUCalibrationTaskHandle);
 	}
 
 	HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,GPIO_PIN_RESET);
@@ -236,42 +236,42 @@ void StartIMUWithMagnetometerTask(void const * argument)
 
 	/* FIXME: Revisar valores de covarianzas, sobre todo los factores que se multiplican, si son necesarios o no*/
 	//Quiero que este en rad/s
-	imuwithmag_send->angular_velocity_covariance[0] = 0.1f*PI/180.0f;
-	imuwithmag_send->angular_velocity_covariance[1] = 0;
-	imuwithmag_send->angular_velocity_covariance[2] = 0;
-	imuwithmag_send->angular_velocity_covariance[3] = 0;
-	imuwithmag_send->angular_velocity_covariance[4] = 0.1f*PI/180.0f;
-	imuwithmag_send->angular_velocity_covariance[5] = 0;
-	imuwithmag_send->angular_velocity_covariance[6] = 0;
-	imuwithmag_send->angular_velocity_covariance[7] = 0;
-	imuwithmag_send->angular_velocity_covariance[8] = 0.1f*PI/180.0f;
+	imucal_send->angular_velocity_covariance[0] = 0.1f*PI/180.0f;
+	imucal_send->angular_velocity_covariance[1] = 0;
+	imucal_send->angular_velocity_covariance[2] = 0;
+	imucal_send->angular_velocity_covariance[3] = 0;
+	imucal_send->angular_velocity_covariance[4] = 0.1f*PI/180.0f;
+	imucal_send->angular_velocity_covariance[5] = 0;
+	imucal_send->angular_velocity_covariance[6] = 0;
+	imucal_send->angular_velocity_covariance[7] = 0;
+	imucal_send->angular_velocity_covariance[8] = 0.1f*PI/180.0f;
 
 	//Total RMS Noise del acc = 8 mg-rms (Datasheet)
 	//RMS = MEAN² + VAR, con VAR = SIGMA² -> Como es de ruido : MEAN = 0
 	//Esto ya es a 1 sigma ya que asi se define a la varianza
 
 	//Quiero que este en m/s²
-	imuwithmag_send->linear_acceleration_covariance[0] = 0.008f*GRAVITY;
-	imuwithmag_send->linear_acceleration_covariance[1] = 0;
-	imuwithmag_send->linear_acceleration_covariance[2] = 0;
-	imuwithmag_send->linear_acceleration_covariance[3] = 0;
-	imuwithmag_send->linear_acceleration_covariance[4] = 0.008f*GRAVITY;
-	imuwithmag_send->linear_acceleration_covariance[5] = 0;
-	imuwithmag_send->linear_acceleration_covariance[6] = 0;
-	imuwithmag_send->linear_acceleration_covariance[7] = 0;
-	imuwithmag_send->linear_acceleration_covariance[8] = 0.008f*GRAVITY;
+	imucal_send->linear_acceleration_covariance[0] = 0.008f*GRAVITY;
+	imucal_send->linear_acceleration_covariance[1] = 0;
+	imucal_send->linear_acceleration_covariance[2] = 0;
+	imucal_send->linear_acceleration_covariance[3] = 0;
+	imucal_send->linear_acceleration_covariance[4] = 0.008f*GRAVITY;
+	imucal_send->linear_acceleration_covariance[5] = 0;
+	imucal_send->linear_acceleration_covariance[6] = 0;
+	imucal_send->linear_acceleration_covariance[7] = 0;
+	imucal_send->linear_acceleration_covariance[8] = 0.008f*GRAVITY;
 
 	// Magnetometer covariance
 	/* TODO: define mag covariance */
-	imuwithmag_send->magnetic_field_covariance[0] = 1;
-	imuwithmag_send->magnetic_field_covariance[1] = 0;
-	imuwithmag_send->magnetic_field_covariance[2] = 0;
-	imuwithmag_send->magnetic_field_covariance[3] = 0;
-	imuwithmag_send->magnetic_field_covariance[4] = 1;
-	imuwithmag_send->magnetic_field_covariance[5] = 0;
-	imuwithmag_send->magnetic_field_covariance[6] = 0;
-	imuwithmag_send->magnetic_field_covariance[7] = 0;
-	imuwithmag_send->magnetic_field_covariance[8] = 1;
+	imucal_send->magnetic_field_covariance[0] = 1;
+	imucal_send->magnetic_field_covariance[1] = 0;
+	imucal_send->magnetic_field_covariance[2] = 0;
+	imucal_send->magnetic_field_covariance[3] = 0;
+	imucal_send->magnetic_field_covariance[4] = 1;
+	imucal_send->magnetic_field_covariance[5] = 0;
+	imucal_send->magnetic_field_covariance[6] = 0;
+	imucal_send->magnetic_field_covariance[7] = 0;
+	imucal_send->magnetic_field_covariance[8] = 1;
 
 	osDelay(1000);
 	for(;;)
@@ -282,31 +282,30 @@ void StartIMUWithMagnetometerTask(void const * argument)
 				if(nh.connected())
 				{
 					// Update ROS time
-					imuwithmag_send->header.stamp.sec = nh.now().sec;
-					imuwithmag_send->header.stamp.nsec = nh.now().nsec;
+					imucal_send->header.stamp.sec = nh.now().sec;
+					imucal_send->header.stamp.nsec = nh.now().nsec;
 				}
-				// Esta en NED tomando ref del magnetometro
 
-				mpu9250.read_accel_data(accel);  // Read the x/y/z adc values
-				mpu9250.read_gyro_data(gyro);  // Read the x/y/z adc values
-				mpu9250.read_mag_data(mag);  // Read the x/y/z adc values
+				mpu9250.read_accel_data_uncalibrated(accel);  // Read the x/y/z adc values
+				mpu9250.read_gyro_data_uncalibrated(gyro);  // Read the x/y/z adc values
+				mpu9250.read_mag_data_uncalibrated(mag);  // Read the x/y/z adc values
 				mpu9250.read_temp_data(temp);  // Read the adc values
 
 				/* uncalibrated linear_acceleration in m/s^2 */
-				imuwithmag_send->linear_acceleration.x = accel.x*GRAVITY;
-				imuwithmag_send->linear_acceleration.y = accel.y*GRAVITY;
-				imuwithmag_send->linear_acceleration.z = accel.z*GRAVITY;
+				imucal_send->linear_acceleration.x = accel.x*GRAVITY;
+				imucal_send->linear_acceleration.y = accel.y*GRAVITY;
+				imucal_send->linear_acceleration.z = accel.z*GRAVITY;
 
 				/* uncalibrated angular velocity to rad/sec */
-				imuwithmag_send->angular_velocity.x = gyro.x*PI/180.0f;
-				imuwithmag_send->angular_velocity.y = gyro.y*PI/180.0f;
-				imuwithmag_send->angular_velocity.z = gyro.z*PI/180.0f;
+				imucal_send->angular_velocity.x = gyro.x*PI/180.0f;
+				imucal_send->angular_velocity.y = gyro.y*PI/180.0f;
+				imucal_send->angular_velocity.z = gyro.z*PI/180.0f;
 
 				/* uncalibrated magnetic_field in Tesla */
 				/* 1 miliGauss = 1e-7 Tesla */
-				imuwithmag_send->magnetic_field.x = mag.x / 10000000;
-				imuwithmag_send->magnetic_field.y = mag.y / 10000000;
-				imuwithmag_send->magnetic_field.z = mag.z / 10000000;
+				imucal_send->magnetic_field.x = mag.x / 10000000.0;
+				imucal_send->magnetic_field.y = mag.y / 10000000.0;
+				imucal_send->magnetic_field.z = mag.z / 10000000.0;
 
 				/* Send message */
 				osMessagePut(PublishQueueHandle,2,0);

@@ -13,9 +13,7 @@
 
 void StartMPU9250Task(void const * argument);
 
-#ifdef IMU_CALIBRATION
-void StartIMUWithMagnetometerTask(void const * argument);
-#endif
+void StartIMUCalibrationTask(void const * argument);
 
 void StartGPSTask(void const * argument);
 
@@ -23,7 +21,7 @@ void StartMovementTask(void const * argument);
 void movementCallback(const std_msgs::String& mov);
 
 extern osMessageQId PublishQueueHandle;
-extern osThreadId IMUWithMagnetometerTaskHandle;
+extern osThreadId IMUCalibrationTaskHandle;
 extern osThreadId GPSTaskHandle;
 extern osThreadId MovementTaskHandle;
 extern osThreadId MPU9250TaskHandle;
@@ -42,22 +40,24 @@ extern "C"
 		/* IMU publisher */
 		sensor_msgs::Imu imu;
 		ros::Publisher pub_imu("imu_data",&imu);
-
+		imu.header.frame_id = "imu_data";
 		/* Definition of mpu9250_task */
 		const osThreadDef_t os_thread_def_mpu9250_task = \
 		{ (char*)"mpu9250_task", StartMPU9250Task, osPriorityNormal, 0, 256};
 
 		/* IMU calibration publisher */
-		ramon_calibration::ImuWithMag imu_mag;
-		ros::Publisher pub_imumag("imu_cal_data",&imu_mag);
+		ramon_calibration::ImuWithMag imu_cal;
+		ros::Publisher pub_imu_calibration("imu_cal_data",&imu_cal);
+		imu_cal.header.frame_id = "imu_cal_data";
 
 		/* Definition of magnetometer_task */
-		const osThreadDef_t os_thread_def_imuwithmagnetometer_task = \
-		{ (char*)"magnetometer_task", StartIMUWithMagnetometerTask, osPriorityNormal, 0, 256};
+		const osThreadDef_t os_thread_def_imucalibration_task = \
+		{ (char*)"magnetometer_task", StartIMUCalibrationTask, osPriorityNormal, 0, 256};
 
 		/* GPS publisher */
 		sensor_msgs::NavSatFix gps;
 		ros::Publisher pub_gps("gps_fix",&gps);
+		gps.header.frame_id = "gps_fix";
 
 		/* Definition of gps_task */
 		const osThreadDef_t os_thread_def_gps_task = \
@@ -77,7 +77,7 @@ extern "C"
 #	ifndef IMU_CALIBRATION
 		nh.advertise(pub_imu);
 #	else
-		nh.advertise(pub_imumag);
+		nh.advertise(pub_imu_calibration);
 #	endif
 
 #	ifdef GPS_DATA_SEND
@@ -93,8 +93,8 @@ extern "C"
 		/* Creation of mpu9250_task */
 		MPU9250TaskHandle = osThreadCreate(&os_thread_def_mpu9250_task, (void*)&imu);
 #	else
-		/* Creation of imuwithmagnetometer task */
-		IMUWithMagnetometerTaskHandle = osThreadCreate(&os_thread_def_imuwithmagnetometer_task, (void*)&imu_mag);
+		/* Creation of imuCalibration task */
+		IMUCalibrationTaskHandle = osThreadCreate(&os_thread_def_imucalibration_task, (void*)&imu_cal);
 #	endif
 
 #	ifdef GPS_DATA_SEND
@@ -133,7 +133,7 @@ extern "C"
 
 						/* MPU9250 calibration */
 						case 2:
-							pub_imumag.publish(&imu_mag);
+							pub_imu_calibration.publish(&imu_cal);
 							break;
 
 						default:

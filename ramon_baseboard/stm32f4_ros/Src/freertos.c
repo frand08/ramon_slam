@@ -66,7 +66,7 @@ osSemaphoreId GPSIntSemHandle;
 osThreadId MPU9250SendTaskHandle;
 
 osThreadId MPU9250TaskHandle;
-osThreadId IMUWithMagnetometerTaskHandle;
+osThreadId IMUCalibrationTaskHandle;
 osThreadId GPSTaskHandle;
 osThreadId MovementTaskHandle;
 /* USER CODE END Variables */

@@ -8,8 +8,9 @@
 #include <Eigen/Eigen>
 #include <unsupported/Eigen/NonLinearOptimization>
 
-#include "gyro_cal.h"
-#include "accel_cal.h"
+#include "gyroscope.h"
+#include "accelerometer.h"
+#include "magnetometer.h"
 #include "static_detector.h"
 
 

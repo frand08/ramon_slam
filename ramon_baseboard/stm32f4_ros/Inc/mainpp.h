@@ -44,7 +44,7 @@ extern "C" {
 
 
 // En caso de querer calibrar la IMU completa uso este define, sino es modo normal
-//#define IMU_CALIBRATION
+#define IMU_CALIBRATION
 
 // Para publicar o subscribir los topics cuando corresponda
 

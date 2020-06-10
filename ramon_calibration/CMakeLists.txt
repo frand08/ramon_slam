@@ -217,15 +217,16 @@ add_library(static_detector src/static_detector.cpp)
 
 add_library(allan_variance src/allan_variance.cpp)
 
-add_library(gyro_cal src/gyro_cal.cpp)
-add_library(accel_cal src/accel_cal.cpp)
+add_library(gyroscope src/gyroscope.cpp)
+add_library(accelerometer src/accelerometer.cpp)
+add_library(magnetometer src/magnetometer.cpp)
 
 add_executable(mag_cal src/mag_cal.cpp)
 target_link_libraries(mag_cal ${catkin_LIBRARIES})
 
 add_executable(imu_cal src/imu_cal.cpp)
 target_include_directories(imu_cal PRIVATE ${PYTHON_INCLUDE_DIRS})
-target_link_libraries(imu_cal ${catkin_LIBRARIES} ${PYTHON_LIBRARIES} gyro_cal accel_cal static_detector)
+target_link_libraries(imu_cal ${catkin_LIBRARIES} ${PYTHON_LIBRARIES} gyroscope accelerometer static_detector)
 
 add_executable(gyro_variance src/gyro_variance.cpp)
 target_include_directories(gyro_variance PRIVATE ${PYTHON_INCLUDE_DIRS})

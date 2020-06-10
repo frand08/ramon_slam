@@ -1,4 +1,4 @@
-#include "gyro_cal.h"
+#include "gyroscope.h"
 
 int gyro_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, int tinit_samples, float dt, Eigen::VectorXf &output_values)
 {

@@ -140,11 +140,13 @@ bool c_MPU9250::init(void)
 		this->f_reset_mpu9250(); // Reset registers to default in preparation for device calibration
 		this->f_calibrate_mpu9250(); // Calibrate gyro and accelerometers, load biases in bias registers
 
-	//		mpu9250.writeByte(MPU9250_ADDRESS, FIFO_EN, 0x01111000);      // Enable FIFO: GYRO, ACCEL
-	//		mpu9250.writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x00010000);   // Interrupt enable -> FIFO Overflow
+//		mpu9250.writeByte(MPU9250_ADDRESS, FIFO_EN, 0x01111000);      // Enable FIFO: GYRO, ACCEL
+//		mpu9250.writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x00010000);   // Interrupt enable -> FIFO Overflow
 
+		// Init
 		this->f_delay_ms(2);
-		this->f_init_mpu9250();
+		this->f_init_mpu6500();
+		this->f_delay_ms(1);
 		this->f_init_ak8963();
 		this->f_delay_ms(2);
 	}
@@ -362,9 +364,9 @@ void c_MPU9250::read_accel_data(accel_data &accel)
 
 	  this->read_accel_data_raw(data);
 
-	  accel.x = (float)data[0]*this->f_get_accel_res();// - accel_bias_[0];  // get actual g value, this depends on scale being set
-	  accel.y = (float)data[1]*this->f_get_accel_res();// - accel_bias_[1];
-	  accel.z = (float)data[2]*this->f_get_accel_res();// - accel_bias_[2];
+	  accel.x = (float)data[0]*this->f_get_accel_res() - accel_bias_[0];  // get actual g value, this depends on scale being set
+	  accel.y = (float)data[1]*this->f_get_accel_res() - accel_bias_[1];
+	  accel.z = (float)data[2]*this->f_get_accel_res() - accel_bias_[2];
 }
 
 void c_MPU9250::read_accel_data_raw(int16_t *data)
@@ -376,15 +378,26 @@ void c_MPU9250::read_accel_data_raw(int16_t *data)
 	  data[2] = (int16_t)(((int16_t)rawData[4] << 8) | rawData[5]) ;
 }
 
+void c_MPU9250::read_accel_data_uncalibrated(accel_data &accel)
+{
+	  int16_t data[3];
+
+	  this->read_accel_data_raw(data);
+
+	  accel.x = (float)data[0]*this->f_get_accel_res();  // get actual g value, this depends on scale being set
+	  accel.y = (float)data[1]*this->f_get_accel_res();
+	  accel.z = (float)data[2]*this->f_get_accel_res();
+}
+
 void c_MPU9250::read_gyro_data(gyro_data &gyro)
 {
 	  int16_t data[3];
 
 	  this->read_gyro_data_raw(data);
 
-	  gyro.x = (float)data[0]*this->f_get_gyro_res();// - gyro_bias_[0];  // get actual gyro value, this depends on scale being set
-	  gyro.y = (float)data[1]*this->f_get_gyro_res();// - gyro_bias_[1];
-	  gyro.z = (float)data[2]*this->f_get_gyro_res();// - gyro_bias_[2];
+	  gyro.x = (float)data[0]*this->f_get_gyro_res() - gyro_bias_[0];  // get actual gyro value, this depends on scale being set
+	  gyro.y = (float)data[1]*this->f_get_gyro_res() - gyro_bias_[1];
+	  gyro.z = (float)data[2]*this->f_get_gyro_res() - gyro_bias_[2];
 }
 
 void c_MPU9250::read_gyro_data_raw(int16_t *data)
@@ -394,6 +407,17 @@ void c_MPU9250::read_gyro_data_raw(int16_t *data)
 	data[0] = (int16_t)(((int16_t)rawData[0] << 8) | rawData[1]) ;  // Turn the MSB and LSB into a signed 16-bit value
 	data[1] = (int16_t)(((int16_t)rawData[2] << 8) | rawData[3]) ;
 	data[2] = (int16_t)(((int16_t)rawData[4] << 8) | rawData[5]) ;
+}
+
+void c_MPU9250::read_gyro_data_uncalibrated(gyro_data &gyro)
+{
+	  int16_t data[3];
+
+	  this->read_gyro_data_raw(data);
+
+	  gyro.x = (float)data[0]*this->f_get_gyro_res();  // get actual gyro value, this depends on scale being set
+	  gyro.y = (float)data[1]*this->f_get_gyro_res();
+	  gyro.z = (float)data[2]*this->f_get_gyro_res();
 }
 
 void c_MPU9250::read_mag_data(mag_data &mag)
@@ -409,7 +433,6 @@ void c_MPU9250::read_mag_data(mag_data &mag)
 		mag.z = ((float)data[2] - mag_offset_bias_[2])*mag_scale_bias_[2]*this->f_get_mag_res()*mag_calibration_[2];
 	}
 }
-
 
 void c_MPU9250::read_mag_data_uncalibrated(mag_data &mag)
 {
@@ -751,10 +774,10 @@ void c_MPU9250::f_init_ak8963(void)
 }
 
 
-void c_MPU9250::f_init_mpu9250()
+void c_MPU9250::f_init_mpu6500()
 {
 	uint8_t data_aux = 0;	// Para escribir
-	 // Initialize MPU9250 device
+	 // Initialize MPU6500 device
 	 // wake up device
 	data_aux = 0x00;
 	  this->f_write_bytes(MPU9250_ADDRESS, PWR_MGMT_1, 1, &data_aux); // Clear sleep mode bit (6), enable all sensors

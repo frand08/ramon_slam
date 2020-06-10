@@ -1,4 +1,4 @@
-#include "accel_cal.h"
+#include "accelerometer.h"
 
 int accel_calibration(Eigen::MatrixXf accel_values, Eigen::VectorXf &output_values)
 {

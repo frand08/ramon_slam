@@ -120,7 +120,7 @@ struct gyro_cal_functor
             xValue << gyro_values(int(i + c2 * dt_factor), 0),         // w_x
                       gyro_values(int(i + c2 * dt_factor), 1),         // w_y
                       gyro_values(int(i + c2 * dt_factor), 2);         // w_z
-			w_o = T_g * K_g * (xValue + b_g);
+			w_o = T_g * K_g * (xValue + b_g + gyro_measnoise);
 			omega <<   0   , -w_o(0), -w_o(1), -w_o(2),
 					 w_o(0),    0   ,  w_o(2), -w_o(1),
 					 w_o(1), -w_o(2),    0   , 	w_o(0),
@@ -133,7 +133,7 @@ struct gyro_cal_functor
             xValue << gyro_values(int(i + c3 * dt_factor), 0),         // w_x
                       gyro_values(int(i + c3 * dt_factor), 1),         // w_y
                       gyro_values(int(i + c3 * dt_factor), 2);         // w_z
-			w_o = T_g * K_g * (xValue + b_g);
+			w_o = T_g * K_g * (xValue + b_g + gyro_measnoise);
 			omega <<   0   , -w_o(0), -w_o(1), -w_o(2),
 					 w_o(0),    0   ,  w_o(2), -w_o(1),
 					 w_o(1), -w_o(2),    0   , 	w_o(0),
@@ -146,7 +146,7 @@ struct gyro_cal_functor
             xValue << gyro_values(int(i + c4 * dt_factor), 0),         // w_x
                       gyro_values(int(i + c4 * dt_factor), 1),         // w_y
                       gyro_values(int(i + c4 * dt_factor), 2);         // w_z
-			w_o = T_g * K_g * (xValue + b_g);
+			w_o = T_g * K_g * (xValue + b_g + gyro_measnoise);
 			omega <<   0   , -w_o(0), -w_o(1), -w_o(2),
 					 w_o(0),    0   ,  w_o(2), -w_o(1),
 					 w_o(1), -w_o(2),    0   , 	w_o(0),

@@ -1,4 +1,4 @@
-Bag file: $(find ramon_calibration)/bagfiles/complete_cal.bag
+Bag file: $(find ramon_calibration)/bagfiles/2020_05_19_complete_cal.bag
 Data rate: 0.005000
 Tinit: 8.000000
 tw: 1.000000

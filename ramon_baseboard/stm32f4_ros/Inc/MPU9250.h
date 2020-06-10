@@ -257,7 +257,7 @@ class c_MPU9250
 		float f_get_mag_res();
 
 		void f_init_ak8963(void);
-		void f_init_mpu9250(void);
+		void f_init_mpu6500(void);
 
 		// Accelerometer and gyroscope self test; check calibration wrt factory settings
 		void f_mpu9250_self_test(float * destination); // Should return percent deviation from factory trim values, +/- 14 or less deviation is a pass

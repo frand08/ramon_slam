@@ -2,14 +2,14 @@ cmake_minimum_required(VERSION 2.8.3)
 project(ramon_calibration)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
+add_compile_options(-std=c++14)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   roscpp
-  rospy
+  # rospy
   std_msgs
   rosbag
   sensor_msgs
@@ -19,7 +19,8 @@ find_package(catkin REQUIRED COMPONENTS
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
-find_package(PythonLibs 2.7)
+find_package(PythonLibs)
+# find_package(PythonLibs 2.7)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -212,21 +213,25 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 
-
-add_library(static_detector src/static_detector.cpp)
-
 add_library(allan_variance src/allan_variance.cpp)
 
-add_library(gyroscope src/gyroscope.cpp)
-add_library(accelerometer src/accelerometer.cpp)
-add_library(magnetometer src/magnetometer.cpp)
+
+add_library(accel src/accel_calibration.cpp)
+add_library(gyro src/gyro_calibration.cpp)
+
+add_library(mag src/mag_calibration.cpp)
+target_include_directories(mag PRIVATE ${PYTHON_INCLUDE_DIRS})
+
+add_library(imu src/imu_calibration.cpp)
+target_include_directories(imu PRIVATE ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(imu ${catkin_LIBRARIES} ${PYTHON_LIBRARIES} accel gyro mag)
+
+add_executable(imu_calibration src/imu_calibration_main.cpp)
+target_include_directories(imu_calibration PRIVATE ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(imu_calibration ${catkin_LIBRARIES} ${PYTHON_LIBRARIES} imu)
 
 add_executable(mag_cal src/mag_cal.cpp)
 target_link_libraries(mag_cal ${catkin_LIBRARIES})
-
-add_executable(imu_cal src/imu_cal.cpp)
-target_include_directories(imu_cal PRIVATE ${PYTHON_INCLUDE_DIRS})
-target_link_libraries(imu_cal ${catkin_LIBRARIES} ${PYTHON_LIBRARIES} gyroscope accelerometer static_detector)
 
 add_executable(gyro_variance src/gyro_variance.cpp)
 target_include_directories(gyro_variance PRIVATE ${PYTHON_INCLUDE_DIRS})

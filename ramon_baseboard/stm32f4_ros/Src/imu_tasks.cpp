@@ -289,7 +289,7 @@ void StartIMUCalibrationTask(void const * argument)
 				mpu9250.read_accel_data_uncalibrated(accel);  // Read the x/y/z adc values
 				mpu9250.read_gyro_data_uncalibrated(gyro);  // Read the x/y/z adc values
 				mpu9250.read_mag_data_uncalibrated(mag);  // Read the x/y/z adc values
-				mpu9250.read_temp_data(temp);  // Read the adc values
+//				mpu9250.read_temp_data(temp);  // Read the adc values
 
 				/* uncalibrated linear_acceleration in m/s^2 */
 				imucal_send->linear_acceleration.x = accel.x*GRAVITY;

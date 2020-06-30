@@ -1,6 +1,7 @@
 #include <iostream>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
+#include <ramon_calibration/ImuWithMag.h>
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 
@@ -45,16 +46,20 @@ int main (int argc, char** argv)
     bag.open(bag_file, rosbag::bagmode::Read);
 
     std::vector<std::string> topics;
-    topics.push_back(std::string("/imu_data"));
+    // topics.push_back(std::string("/imu_data"));
+    topics.push_back(topic_name);
     rosbag::View view(bag, rosbag::TopicQuery(topics));
 
     ros::Time::init();
     int j = 0;
-    
+
+    ROS_INFO_STREAM("Reading bag file " << bag_file << "...");    
     gyro_values.resize(bag.getSize(),3);
     foreach(rosbag::MessageInstance const mm, view)
     {
-        sensor_msgs::Imu::ConstPtr i = mm.instantiate<sensor_msgs::Imu>();
+        /* TODO: poner condicional para ver de que tipo de msg se trata */
+        // sensor_msgs::Imu::ConstPtr i = mm.instantiate<sensor_msgs::Imu>();
+        ramon_calibration::ImuWithMag::ConstPtr i = mm.instantiate<ramon_calibration::ImuWithMag>();
         if (i != NULL)
         {
             gyro_values(j,0) = i->angular_velocity.x;
@@ -64,11 +69,12 @@ int main (int argc, char** argv)
         }
     }
     gyro_values.conservativeResize(j, 3);
-
+    ROS_INFO("Done.");
+    ROS_INFO("Performing the Allan Variance...");
     allan_variance(gyro_values, gyro_allan_variance);
-    
+    ROS_INFO("Done.");
+    ROS_INFO("Allan Variance results:");
     // Plot the outputs
-
     Eigen::VectorXf v1 = gyro_allan_variance.col(0);
     std::vector<float> v2, t(gyro_allan_variance.rows());
     std::iota(t.begin(), t.end(), 0);

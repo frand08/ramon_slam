@@ -3,7 +3,9 @@
       <!-- casa_mercedes/2019-09-30_living_arriba_1hz.bag -->
       <!-- depto_piezafondo/_2019-10-14-10-38-58_pieza_fondo_1hz.bag -->
       <!-- depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag -->
-      <arg name="BagFile"           default="depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag"/>
+      <!-- <arg name="BagFile"           default="depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag"/> -->
+      <!-- <arg name="BagFile"           default="floors/floor1.bag"/> -->
+      <arg name="BagFile"           default="cartographer_records/test5.bag"/>
 	
       <arg name="isSweep"	      default="false"/>
 	<arg name="isRecord"	      default="false"/>
@@ -20,7 +22,7 @@
     <param if="$(arg isPlayBack)" name="/use_sim_time" value="true"/>
     
     <node if="$(arg isPlayBack)" pkg="rosbag" type="play" name="rosbag_play_robot"
-       args="--clock $(find ramon_slam2d)/bagfiles/$(arg BagFile)"
+       args="--clock --rate=0.05 $(find ramon_slam2d)/bagfiles/$(arg BagFile)"
     />
     <!-- run sweep_node node -->
     <node if="$(arg isSweep)" name="sweep_node" pkg="sweep_ros" type="sweep_node" output="screen">
@@ -87,8 +89,9 @@
   <node if="$(arg isTransform)" 
         name="ramon_slam2d"	
         pkg="ramon_slam2d"  
-        type="ramon_slam2d" 
+        type="slam2d" 
         output="screen">
+      <param name="scan_topic_name" type="string" value="/f_scan"/>
   </node>
 
 	<!-- Visualisation RVIZ for PointCloud -->

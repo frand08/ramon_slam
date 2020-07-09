@@ -36,5 +36,5 @@ add_library(mle src/mle.cpp)
 add_executable(lidar_transform src/lidar_transform.cpp)
 target_link_libraries(lidar_transform ${catkin_LIBRARIES} brasenham contour mle)
 
-add_executable(ramon_slam2d src/main.cpp src/ramon_slam2d.cpp)
-target_link_libraries(ramon_slam2d ${catkin_LIBRARIES})
+add_executable(slam2d src/main.cpp src/slam2d.cpp)
+target_link_libraries(slam2d ${catkin_LIBRARIES})

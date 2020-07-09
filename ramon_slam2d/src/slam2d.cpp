@@ -1,5 +1,5 @@
 /**
- * @file ramon_slam2d.cpp
+ * @file slam2d.cpp
  * @author Francisco A. Dominguez (dominguezfranciscoa@gmail.com)
  * @brief
  * @version 0.1
@@ -9,42 +9,46 @@
  *
  */
 
-#include "ramon_slam2d.h"
+#include "slam2d.h"
+
+using namespace ramon_slam2d;
 
 /* Public Functions */
 
 /**
- * @brief Construct a new RamonSlam2D::RamonSlam2D object
+ * @brief Construct a new SLAM2D::SLAM2D object
  *
  */
-RamonSlam2D::RamonSlam2D() : transform_thread_(NULL), debug_(DEBUG_MODE)
+SLAM2D::SLAM2D() : transform_thread_(NULL), debug_(DEBUG_MODE), nh_("~")
 {
   m_ = 50;
   n_ = 50;
   res_ = 0.02;
+  res_low_ = 0.2;
   this->init();
 }
 
 /**
- * @brief Construct a new RamonSlam2D::RamonSlam2D object
+ * @brief Construct a new SLAM2D::SLAM2D object
  *
  * @param M
  * @param N
  * @param res
  */
-RamonSlam2D::RamonSlam2D(uint32_t M, uint32_t N, float res) : transform_thread_(NULL), debug_(DEBUG_MODE)
+SLAM2D::SLAM2D(uint32_t M, uint32_t N, float res) : transform_thread_(NULL), debug_(DEBUG_MODE), nh_("~")
 {
   m_ = M;
   n_ = N;
   res_ = res;
+  res_low_ = 10 * res;
   this->init();
 }
 
 /**
- * @brief Destroy the RamonSlam2D::RamonSlam2D object
+ * @brief Destroy the SLAM2D::SLAM2D object
  *
  */
-RamonSlam2D::~RamonSlam2D()
+SLAM2D::~SLAM2D()
 {
   if (transform_thread_)
   {
@@ -62,7 +66,7 @@ RamonSlam2D::~RamonSlam2D()
  * @param y1
  * @param point
  */
-void RamonSlam2D::bresenhamLineAlgorithm(float x0, float y0, float x1, float y1,
+void SLAM2D::bresenhamLineAlgorithm(float x0, float y0, float x1, float y1,
                                          std::vector<geometry_msgs::Point32>& point)
 {
   if (abs(y1 - y0) < abs(x1 - x0))
@@ -98,7 +102,7 @@ void RamonSlam2D::bresenhamLineAlgorithm(float x0, float y0, float x1, float y1,
  * @param std
  * @return float
  */
-float RamonSlam2D::gaussianBlurIntegral(float a, float b, float c, float std)
+float SLAM2D::gaussianBlurIntegral(float a, float b, float c, float std)
 {
   // Qian2019 - P.7
   // erf: error function
@@ -111,7 +115,7 @@ float RamonSlam2D::gaussianBlurIntegral(float a, float b, float c, float std)
  * @param value Probability value
  * @return float logit(value)
  */
-float RamonSlam2D::getLogitFromProba(float value)
+float SLAM2D::getLogitFromProba(float value)
 {
   // Avoid infinite values
   if (value > 0.99)
@@ -128,7 +132,7 @@ float RamonSlam2D::getLogitFromProba(float value)
  * @param value
  * @return float
  */
-float RamonSlam2D::getProbaFromLogit(float value)
+float SLAM2D::getProbaFromLogit(float value)
 {
   return (std::exp(value) / (1 + std::exp(value)));
 }
@@ -142,7 +146,7 @@ float RamonSlam2D::getProbaFromLogit(float value)
  * @param theta rotation in radians
  * @return Eigen::Matrix2Xf
  */
-Eigen::Matrix2Xf RamonSlam2D::rotateAndTranslate2D(Eigen::Matrix2Xf matrix, float x, float y, float theta)
+Eigen::Matrix2Xf SLAM2D::rotateAndTranslate2D(Eigen::Matrix2Xf matrix, float x, float y, float theta)
 {
   // This class is equivalent to a single scalar representing a counter clock wise rotation as a single angle in radian.
   Eigen::Rotation2Df rot2(theta);
@@ -162,14 +166,14 @@ Eigen::Matrix2Xf RamonSlam2D::rotateAndTranslate2D(Eigen::Matrix2Xf matrix, floa
  * @brief Begins the 2DSlam algorithm, advertising and subscribing to the needed topics
  *
  */
-void RamonSlam2D::start()
+void SLAM2D::start()
 {
   map_pub_ = nh_.advertise<nav_msgs::OccupancyGrid>("map", 1);
   map_meta_pub_ = nh_.advertise<nav_msgs::MapMetaData>("map_metadata", 1);
-  laser_sub_ = nh_.subscribe("scan", 1, &RamonSlam2D::laserCallback, this);  // check the last param
+  laser_sub_ = nh_.subscribe(scan_topic_name_, 1, &SLAM2D::laserCallback, this);  // check the last param
 
   // TF thread
-  transform_thread_ = new boost::thread(boost::bind(&RamonSlam2D::publishTransform, this));
+  transform_thread_ = new boost::thread(boost::bind(&SLAM2D::publishTransform, this));
 }
 
 /* Private functions */
@@ -184,7 +188,7 @@ void RamonSlam2D::start()
  * @param direction
  * @param point
  */
-void RamonSlam2D::bresenhamLineHigh(float x0, float y0, float x1, float y1, int direction,
+void SLAM2D::bresenhamLineHigh(float x0, float y0, float x1, float y1, int direction,
                                     std::vector<geometry_msgs::Point32>& point)
 {
   float dx = x1 - x0;
@@ -229,7 +233,7 @@ void RamonSlam2D::bresenhamLineHigh(float x0, float y0, float x1, float y1, int 
  * @param direction
  * @param point
  */
-void RamonSlam2D::bresenhamLineLow(float x0, float y0, float x1, float y1, int direction,
+void SLAM2D::bresenhamLineLow(float x0, float y0, float x1, float y1, int direction,
                                    std::vector<geometry_msgs::Point32>& point)
 {
   float dx = x1 - x0;
@@ -271,7 +275,7 @@ void RamonSlam2D::bresenhamLineLow(float x0, float y0, float x1, float y1, int d
  * @param rigid Information about the input scan, offsets and output scans (reference)
  * @return int zero value
  */
-int RamonSlam2D::getMaximumLikelihoodTransform(int x_index, rigid_t& rigid)
+int SLAM2D::getMaximumLikelihoodTransform(int x_index, rigid_t& rigid)
 {
   float delta_x = res_;
   float delta_y = res_;
@@ -316,7 +320,7 @@ int RamonSlam2D::getMaximumLikelihoodTransform(int x_index, rigid_t& rigid)
  * @param likelihood 3x3 matrix return data
  * @param point Point location
  */
-void RamonSlam2D::getOccupancyLikelihood(Eigen::Matrix3f& likelihood, Eigen::Vector2f point)
+void SLAM2D::getOccupancyLikelihood(Eigen::Matrix3f& likelihood, Eigen::Vector2f point)
 {
   // x likelihood values
   float Px1x2, Px2x3, Px3x4;
@@ -372,67 +376,73 @@ void RamonSlam2D::getOccupancyLikelihood(Eigen::Matrix3f& likelihood, Eigen::Vec
  * @brief Gets points which belong to a contour from LaserScan data, taking into account max and min range values
  *
  * @param scan data from the laser scan.
- * @return Eigen::Matrix2Xf Matrix with extracted points
+ * @param points_out Matrix with extracted points
+ * @return int 0: ok
  */
-Eigen::Matrix2Xf RamonSlam2D::getPointsFromScan(sensor_msgs::LaserScan scan)
+int SLAM2D::getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xf &points_out)
 {
   Eigen::Matrix2Xf scan_points = Eigen::Matrix2Xf::Constant(2, scan.ranges.size(), 0.0);
-  Eigen::Matrix2Xf points_out = Eigen::Matrix2Xf::Constant(2, scan.ranges.size(), 0.0);
   int points_count = 0, points_aux = 0, i;
   std::vector<float> angles;
   float pointmod_reg, pointmod_next, pointmod_res;
-
+  bool first_time = true;
+  
+  points_out = Eigen::Matrix2Xf::Constant(2, scan.ranges.size(), 0.0);
+  
   for (float angle = scan.angle_min; angle < scan.angle_max; angle += scan.angle_increment)
   {
     angles.push_back(angle);
   }
 
-  // Get the point of the first scan (even if it's not a valid one)
-  scan_points(0, 0) = -(sin(angles[0]) * scan.ranges[0]);
-  scan_points(1, 0) = cos(angles[0]) * scan.ranges[0];
-
   // Get the points that belong to contours
-  for (i = 1; i < scan.ranges.size(); i++)
+  for (i = 0; i < scan.ranges.size(); i++)
   {
-    if (scan.ranges[i] < scan.range_max && scan.ranges[i] > scan.range_min)
+    if (scan.ranges[i] < scan.range_max && scan.ranges[i] > scan.range_min && !isinf(scan.ranges[i]))
     {
-      // First, convert scan to point (x,y)
+      // Convert scan to point (x,y)
       scan_points(0, i) = -(sin(angles[i]) * scan.ranges[i]);
       scan_points(1, i) = cos(angles[i]) * scan.ranges[i];
 
-      // Then, evaluate if the point is part of a contour
-      pointmod_reg = sqrt(pow(scan_points(0, i - 1), 2) + pow(scan_points(1, i - 1), 2));
-      pointmod_next = sqrt(pow(scan_points(0, i), 2) + pow(scan_points(1, i), 2));
-
-      if (pointmod_reg >= pointmod_next)
-        pointmod_res = pointmod_reg - pointmod_next;
+      // The first time a valid scan point is captured, store the value only
+      if(first_time)
+        first_time = false;
+      // Otherwise, continue operation
       else
-        pointmod_res = pointmod_next - pointmod_reg;
-
-      // If the rest of the module of the two contiguous points is less than the threshold, then they can be part of a
-      // contour
-      if (pointmod_res < point_dis_threshold_)
       {
-        // Save point i-1 in case its the starting point of a new contour
-        if (points_aux == 0)
+        // Evaluate if the point is part of a contour
+        pointmod_reg = sqrt(pow(scan_points(0, i - 1), 2) + pow(scan_points(1, i - 1), 2));
+        pointmod_next = sqrt(pow(scan_points(0, i), 2) + pow(scan_points(1, i), 2));
+
+        if (pointmod_reg >= pointmod_next)
+          pointmod_res = pointmod_reg - pointmod_next;
+        else
+          pointmod_res = pointmod_next - pointmod_reg;
+
+        // If the rest of the module of the two contiguous points is less than the threshold, then they can be part of a
+        // contour
+        if (pointmod_res < point_dis_threshold_)
         {
-          points_out.col(points_count + points_aux) = scan_points.col(i - 1);
+          // Save point i-1 in case its the starting point of a new contour
+          if (points_aux == 0)
+          {
+            points_out.col(points_count + points_aux) = scan_points.col(i - 1);
+            points_aux++;
+          }
+          points_out.col(points_count + points_aux) = scan_points.col(i);
           points_aux++;
         }
-        points_out.col(points_count + points_aux) = scan_points.col(i);
-        points_aux++;
-      }
-      else
-      {
-        // If there are at least min_adjacent_points_ contiguous points, they are considered to belong to a valid
-        // contour.
-        if (points_aux >= min_adjacent_points_)
+        else
         {
-          // Move points index points_aux times, otherwise they will be ovewritten
-          points_count += points_aux;
+          // If there are at least min_adjacent_points_ contiguous points, they are considered to belong to a valid
+          // contour.
+          if (points_aux >= min_adjacent_points_)
+          {
+            // Move points index points_aux times, otherwise they will be ovewritten
+            points_count += points_aux;
+          }
+          // Restart points_aux
+          points_aux = 0;
         }
-        // Restart points_aux
-        points_aux = 0;
       }
     }
   }
@@ -440,9 +450,10 @@ Eigen::Matrix2Xf RamonSlam2D::getPointsFromScan(sensor_msgs::LaserScan scan)
   if (points_aux >= min_adjacent_points_)
     points_count += points_aux;
 
-  // Cut the output matrix
+  // Resize the output matrix
   points_out.conservativeResize(2, points_count);
-  return points_out;
+
+  return 0;
 }
 
 /**
@@ -452,7 +463,7 @@ Eigen::Matrix2Xf RamonSlam2D::getPointsFromScan(sensor_msgs::LaserScan scan)
  * @param scan_in Input laser scanner
  * @param scan_out Laser scanner transformed
  */
-void RamonSlam2D::getRigidBodyTransform(Eigen::Matrix2Xf scan_in, Eigen::Matrix2Xf& scan_out)
+void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xf> scan_in, Eigen::Matrix2Xf &scan_out)
 {
   float x_out, y_out, theta_out;
   float sum_out;
@@ -465,7 +476,7 @@ void RamonSlam2D::getRigidBodyTransform(Eigen::Matrix2Xf scan_in, Eigen::Matrix2
   {
     // Get the best rigid body transform, as the index being part of delta x
     rigid_body_threads.push_back(
-        new boost::thread(&RamonSlam2D::getMaximumLikelihoodTransform, this, i, boost::ref(rigid)));
+        new boost::thread(&SLAM2D::getMaximumLikelihoodTransform, this, i, boost::ref(rigid)));
   }
 
   // delete created threads
@@ -485,10 +496,156 @@ void RamonSlam2D::getRigidBodyTransform(Eigen::Matrix2Xf scan_in, Eigen::Matrix2
 }
 
 /**
+ * @brief Computes rigid body transformations of the lidar data and returns the one that best matches with the map
+ * M(t-1)
+ *
+ * @param scan_in Input laser scanner
+ * @param scan_out Laser scanner transformed
+ */
+int SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xf> scan_in, Eigen::Matrix2Xf &scan_out, int innecesario)
+{
+  float x_out, y_out, theta_out;
+  float sum_out;
+  int i;
+	Eigen::Vector2f center_src, center_dst;
+
+  center_src = scan_in.rowwise().mean();
+  center_dst = map_points_.rowwise().mean();
+
+  Eigen::MatrixXf Dt = (map_points_ - center_dst).transpose();
+  Eigen::Matrix2f H = Dt * (scan_in - center_src);
+  // Eigen::Matrix2f W, U, V;
+
+  Eigen::JacobiSVD<Eigen::MatrixXf> svd;
+  Eigen::MatrixXf H_(2,2);
+
+  H_ << H;
+
+  svd.compute(H_, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  if (!svd.computeU() || !svd.computeV()) 
+  {
+    ROS_ERROR("decomposition error");
+		return -1;
+	}
+
+  Eigen::Matrix2f Vt = svd.matrixV().transpose();
+  Eigen::Matrix2f R = svd.matrixU() * Vt;
+  Eigen::Vector2f t = center_dst - R * center_src;
+  float theta = atan2(R(0,1), R(0,0));
+
+  // Update pose data and output scan
+  x_ = x_ + t(0);
+  y_ = y_ + t(1);
+  theta_ = theta_ + theta;
+  scan_out = rotateAndTranslate2D(scan_in, t(0), t(1), theta);
+
+  ROS_INFO("(x_, y_, theta_) = (%f, %f, %f)", x_, y_, theta_);
+  return 0;
+}
+
+/**
+ * @brief Computes rigid body transformations of the lidar data and returns the one that best matches with the map
+ * M(t-1)
+ * https://gist.github.com/JiaxiangZheng/8168862
+ * @param scan_in Input laser scanner
+ * @param scan_out Laser scanner transformed
+ */
+int SLAM2D::computeRigidTransform(const Eigen::Ref<const Eigen::Matrix2Xf> scan_in, Eigen::Matrix2Xf &scan_out)
+{
+  float x_out, y_out, theta_out;
+  float sum_out;
+  int i;
+	Eigen::Vector2f center_src, center_dst;
+
+  center_src = scan_in.rowwise().mean();
+  center_dst = map_points_.rowwise().mean();
+
+  Eigen::MatrixXf Dt = (map_points_ - center_dst).transpose();
+  Eigen::Matrix2f H = Dt * (scan_in - center_src);
+  // Eigen::Matrix2f W, U, V;
+
+  Eigen::JacobiSVD<Eigen::MatrixXf> svd;
+  Eigen::MatrixXf H_(2,2);
+
+  H_ << H;
+
+  svd.compute(H_, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  if (!svd.computeU() || !svd.computeV()) 
+  {
+    ROS_ERROR("decomposition error");
+		return -1;
+	}
+
+  Eigen::Matrix2f Vt = svd.matrixV().transpose();
+  Eigen::Matrix2f R = svd.matrixU() * Vt;
+  Eigen::Vector2f t = center_dst - R * center_src;
+  float theta = atan2(R(0,1), R(0,0));
+
+  // Update pose data and output scan
+  x_ = x_ + t(0);
+  y_ = y_ + t(1);
+  theta_ = theta_ + theta;
+  scan_out = rotateAndTranslate2D(scan_in, t(0), t(1), theta);
+
+  ROS_INFO("(x_, y_, theta_) = (%f, %f, %f)", x_, y_, theta_);
+  return 0;
+}
+
+/**
+ * @brief Computes rigid body transformations of the lidar data and returns the one that best matches with the map
+ * M(t-1)
+ *
+ * @param scan_in Input laser scanner
+ * @param scan_out Laser scanner transformed
+ */
+/*
+int SLAM2D::computeRigidTransform(const Eigen::Ref<const Eigen::MatrixXf> map_scan)
+{
+  float x_out, y_out, theta_out;
+  float sum_out;
+  int i;
+	Eigen::Vector2f center_src, center_dst;
+
+  center_src = map_scan.rowwise().mean();
+  center_dst = map_eig_.rowwise().mean();
+
+
+  Eigen::MatrixXf Dt = (map_eig_ - center_dst).transpose();
+  Eigen::Matrix2f H = Dt * (map_scan - center_src);
+  // Eigen::Matrix2f W, U, V;
+
+  Eigen::JacobiSVD<Eigen::MatrixXf> svd;
+  Eigen::MatrixXf H_(2,2);
+
+  H_ << H;
+
+  svd.compute(H_, Eigen::ComputeThinU | Eigen::ComputeThinV);
+  if (!svd.computeU() || !svd.computeV()) 
+  {
+    ROS_ERROR("decomposition error");
+		return -1;
+	}
+
+  Eigen::Matrix2f Vt = svd.matrixV().transpose();
+  Eigen::Matrix2f R = svd.matrixU() * Vt;
+  Eigen::Vector2f t = center_dst - R * center_src;
+  float theta = atan2(R(0,1), R(0,0));
+
+  // Update pose data and output scan
+  x_ = x_ + t(0);
+  y_ = y_ + t(1);
+  theta_ = theta_ + theta;
+  scan_out = rotateAndTranslate2D(scan_in, t(0), t(1), theta);
+
+  ROS_INFO("(x_, y_, theta_) = (%f, %f, %f)", x_, y_, theta_);
+  return 0;
+}
+*/
+/**
  * @brief Initializes the private variables of the class
  *
  */
-void RamonSlam2D::init()
+void SLAM2D::init()
 {
   laser_count_ = 0;
   transform_publish_period_ = 0.05;
@@ -500,6 +657,7 @@ void RamonSlam2D::init()
   min_adjacent_points_ = 3;
 
   map_eig_ = Eigen::MatrixXf::Constant(uint32_t(round(m_ / res_)), uint32_t(round(n_ / res_)), point_noinfo_);
+  map_eig_low_ = Eigen::MatrixXf::Constant(uint32_t(round(m_ / res_low_)), uint32_t(round(n_ / res_low_)), point_noinfo_);
 
   std_x_ = 0.01;
   std_y_ = 0.01;
@@ -527,6 +685,14 @@ void RamonSlam2D::init()
     imu_frame_ = "imu";
   if (!nh_.getParam("tf_delay", tf_delay_))
     tf_delay_ = transform_publish_period_;
+  if (!nh_.getParam("scan_topic_name", scan_topic_name_))
+    scan_topic_name_ = "/scan";
+  if (!nh_.getParam("imu_topic_name", imu_topic_name_))
+    use_imu_ = false;
+  else
+    use_imu_ = true;
+
+  ROS_INFO_STREAM("SCAN: " << scan_topic_name_);
 }
 
 /**
@@ -538,17 +704,15 @@ void RamonSlam2D::init()
  * @param scan_points
  * @return Eigen::MatrixXf
  */
-Eigen::MatrixXf RamonSlam2D::inverseScanner(Eigen::Matrix2Xf scan_points)
+void SLAM2D::inverseScanner(Eigen::Matrix2Xf scan_points, Eigen::MatrixXf &m, Eigen::MatrixXf &m_low)
 {
   /* TODO: Da como el orto, se empieza a correr, creo que hay quilombo con x_, y_ y todo eso, y con solo sumarle res_ al
    * map_size deberia alcanzar, pero no lo hace, que se yo */
 
-  // Generated map
-  Eigen::MatrixXf m;
   // Index of each point in map
-  uint32_t index_x, index_y;
+  uint32_t index_x, index_y, index_x_low, index_y_low;
   // Points free between the vehicle and the measured obstacle
-  std::vector<geometry_msgs::Point32> points_free;
+  std::vector<geometry_msgs::Point32> points_free, points_free_low;
   // Point to be updated by the logit function in each step
   Eigen::Vector2f point_update;
   // Max and min values of the scan point vector
@@ -556,32 +720,38 @@ Eigen::MatrixXf RamonSlam2D::inverseScanner(Eigen::Matrix2Xf scan_points)
   Eigen::Vector2f min_val_rows = scan_points.rowwise().minCoeff();
 
   // Map min size in x and y
-  Eigen::Vector2f map_size;
+  Eigen::Vector2f map_size, map_size_low;
 
   /* FIXME: why is res_ not enough? */
   // Get the max value of rows and cols
   if (std::abs(max_val_rows(0)) >= std::abs(min_val_rows(0)))
   {
     map_size(0) = std::abs(max_val_rows(0)) + 10 * res_;
+    map_size_low(0) = std::abs(max_val_rows(0)) + 10 * res_low_;
   }
   else
   {
     map_size(0) = std::abs(min_val_rows(0)) + 10 * res_;
+    map_size_low(0) = std::abs(min_val_rows(0)) + 10 * res_low_;
   }
 
   if (std::abs(max_val_rows(1)) >= std::abs(min_val_rows(1)))
   {
     map_size(1) = std::abs(max_val_rows(1)) + 10 * res_;
+    map_size_low(1) = std::abs(max_val_rows(1)) + 10 * res_low_;
   }
   else
   {
     map_size(1) = std::abs(min_val_rows(1)) + 10 * res_;
+    map_size_low(1) = std::abs(min_val_rows(1)) + 10 * res_low_;
   }
-
+  ROS_INFO("ASDASDAS");
   // Init map with no info value
   m = Eigen::MatrixXf::Constant(uint32_t(round(2 * map_size(0) / res_)), uint32_t(round(2 * map_size(1) / res_)),
                                 point_noinfo_);
-
+  m_low = Eigen::MatrixXf::Constant(uint32_t(round(2 * map_size_low(0) / res_low_)), uint32_t(round(2 * map_size_low(1) / res_low_)),
+                                point_noinfo_);
+  ROS_INFO("SEEEEEEE");
   for (int i = 0; i < scan_points.cols(); i++)
   {
     // Get the free points between the vehicle and each laser point
@@ -617,8 +787,34 @@ Eigen::MatrixXf RamonSlam2D::inverseScanner(Eigen::Matrix2Xf scan_points)
 
     // Clear free points vector
     points_free.clear();
+
+
+
+    // Low map resolution
+    this->bresenhamLineAlgorithm(0, 0, scan_points(0, i) / res_low_, scan_points(1, i) / res_low_, points_free_low);
+
+    if (points_free_low.size() > 0)
+    {
+      for (int index = 0; index < points_free_low.size() - 1; index++)
+      {
+        // Update free points in map
+        index_x_low = uint32_t(round(round(map_size_low(0) / res_low_) + points_free_low[index].x));
+        index_y_low = uint32_t(round(round(map_size_low(1) / res_low_) + points_free_low[index].y));
+
+        m_low(index_x_low, index_y_low) =
+            this->getProbaFromLogit(this->getLogitFromProba(point_free_) +
+                                    this->getLogitFromProba(m_low(index_x_low, index_y_low)) - getLogitFromProba(point_noinfo_));
+      }
+    }
+    index_x_low = uint32_t(round(round(map_size_low(0) / res_low_) + scan_points(0, i) / res_low_));
+    index_y_low = uint32_t(round(round(map_size_low(1) / res_low_) + scan_points(1, i) / res_low_));
+    
+    m_low(index_x_low, index_y_low) =
+        this->getProbaFromLogit(this->getLogitFromProba(point_occupied_) +
+                                this->getLogitFromProba(m_low(index_x_low, index_y_low)) - getLogitFromProba(point_noinfo_));
+
+    points_free_low.clear();
   }
-  return m;
 }
 
 /**
@@ -626,16 +822,15 @@ Eigen::MatrixXf RamonSlam2D::inverseScanner(Eigen::Matrix2Xf scan_points)
  *
  * @param scanptr Pointer to laser scan data
  */
-void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
+void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 {
   static int first_time = 1;
+  static ros::Time last = ros::Time::now();
+  ros::Time now = ros::Time::now();
   sensor_msgs::LaserScan scan = *scanptr;
 
-  Eigen::MatrixXf map_scan;
+  Eigen::MatrixXf map_scan, map_scan_low;
   Eigen::Matrix2Xf scan_points, scan_out;
-
-  int map_delta_x;
-  int map_delta_y;
 
   // Para calcular tiempos del algoritmo
   ros::WallTime start_, end_;
@@ -649,13 +844,17 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   start_ = ros::WallTime::now();
 
   // Get all valid points
-  scan_points = this->getPointsFromScan(scan);
+  this->getPointsFromScan(scan, scan_points);
 
   laser_count_++;
 
   // If laser count == 1, store data, otherwise get the rigid body transform
   if (laser_count_ > 1)
   {
+    // if(now.sec - last.sec < 1)
+    // {
+    //   return;      
+    // }
     this->getRigidBodyTransform(scan_points, scan_out);
   }
   else
@@ -663,8 +862,28 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
     scan_out = scan_points;
   }
 
+  last = now;
+
   // Get map points from scan
-  map_scan = this->inverseScanner(scan_out);
+  this->inverseScanner(scan_out, map_scan, map_scan_low);
+
+  this->mapUpdate(map_scan);
+
+  end_ = ros::WallTime::now();
+  double execution_time = (end_ - start_).toNSec() * 1e-6;
+  ROS_INFO_STREAM_COND(debug_ < 0, "Exectution time (ms): " << execution_time);
+  map_pub_.publish(occmap_);
+}
+
+/**
+ * @brief Updates saved map
+ *
+ * @param map_scan Lidar map of transformed scan
+ */
+void SLAM2D::mapUpdate(Eigen::MatrixXf map_scan)
+{
+  int map_delta_x;
+  int map_delta_y;
 
   map_delta_x = int(round(0.5 * (m_ / res_ - map_scan.rows())));
   map_delta_y = int(round(0.5 * (n_ / res_ - map_scan.cols())));
@@ -679,14 +898,9 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
           this->getLogitFromProba(map_eig_(x + map_delta_x, y + map_delta_y)) - this->getLogitFromProba(point_noinfo_));
 
       occmap_.data[MAP_IDX(occmap_.info.width, x + map_delta_x, y + map_delta_y)] =
-          uint8_t(map_eig_(x + map_delta_x, y + map_delta_y) * 100);
+          int8_t(map_eig_(x + map_delta_x, y + map_delta_y) * 100);
     }
   }
-
-  end_ = ros::WallTime::now();
-  double execution_time = (end_ - start_).toNSec() * 1e-6;
-  ROS_INFO_STREAM_COND(debug_ < 0, "Exectution time (ms): " << execution_time);
-  map_pub_.publish(occmap_);
 }
 
 /**
@@ -698,7 +912,7 @@ void RamonSlam2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
  * @param index_y Index y of the point in the map
  * @param point Point value
  */
-void RamonSlam2D::logitUpdate(Eigen::MatrixXf& m, uint32_t index_x, uint32_t index_y, Eigen::Vector2f point)
+void SLAM2D::logitUpdate(Eigen::MatrixXf& m, uint32_t index_x, uint32_t index_y, Eigen::Vector2f point)
 {
   float logit_t0 = getLogitFromProba(point_noinfo_);
   Eigen::Matrix3f likelihood;
@@ -722,7 +936,7 @@ void RamonSlam2D::logitUpdate(Eigen::MatrixXf& m, uint32_t index_x, uint32_t ind
  * @brief Publishes the transformed point of the vehicle
  *
  */
-void RamonSlam2D::publishTransform(void)
+void SLAM2D::publishTransform(void)
 {
   if (transform_publish_period_ == 0)
     return;

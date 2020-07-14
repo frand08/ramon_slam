@@ -90,8 +90,11 @@
         name="ramon_slam2d"	
         pkg="ramon_slam2d"  
         type="slam2d" 
-        output="screen">
+        output="screen"
+        clear_params="true">
       <param name="scan_topic_name" type="string" value="/f_scan"/>
+      <!-- <param name="imu_topic_name" type="string" value="/imu_data"/> -->
+      <param name="base_frame" type="string" value="/base_footprint"/>
   </node>
 
 	<!-- Visualisation RVIZ for PointCloud -->

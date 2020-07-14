@@ -8,7 +8,7 @@ int main(int argc, char** argv)
 
   ROS_INFO("Por init el Slam 2D");
   // ramon_slam2d::SLAM2D slam(16,16,0.02);
-  ramon_slam2d::SLAM2D slam(100,100,0.02);
+  ramon_slam2d::SLAM2D slam(50,50,0.02);
   ROS_INFO("Inicializado");
   slam.start();
   ros::spin();

@@ -32,9 +32,10 @@ include
 add_library(brasenham src/brasenham_line_algorithm.cpp)
 add_library(contour src/contour_extraction.cpp)
 add_library(mle src/mle.cpp)
+add_library(map_utils src/map_utils.cpp)
 
 add_executable(lidar_transform src/lidar_transform.cpp)
 target_link_libraries(lidar_transform ${catkin_LIBRARIES} brasenham contour mle)
 
 add_executable(slam2d src/main.cpp src/slam2d.cpp)
-target_link_libraries(slam2d ${catkin_LIBRARIES})
+target_link_libraries(slam2d ${catkin_LIBRARIES} map_utils)

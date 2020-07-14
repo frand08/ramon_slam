@@ -15,16 +15,19 @@
 #include <algorithm>
 #include <vector>
 #include <boost/thread.hpp>
-#include <eigen3/Eigen/Dense>
+#include <Eigen/Dense>
 
 #include <ros/ros.h>
 #include <ros/console.h>
 #include <sensor_msgs/LaserScan.h>
+#include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Point32.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <fstream>
+
+#include "map_utils.h"
 
 #define MAP_IDX(map_width, x, y) ((map_width) * (y) + (x))
 #define DEBUG_MODE -5
@@ -32,12 +35,18 @@
 // Struct for rigid body transform threads
 typedef struct
 {
-  Eigen::Matrix2Xf scan_in;
-  float sum_out;
-  float x_out;
-  float y_out;
-  float theta_out;
-  Eigen::Matrix2Xf scan_out;
+  Eigen::Matrix2Xd scan_in;
+  double x;
+  double y;
+  double theta;
+  double sum_out;
+  double x_out;
+  double y_out;
+  double theta_out;
+  double res;
+  double theta_factor;
+  Eigen::Matrix2Xd scan_out;
+  Eigen::MatrixXd map;
 } rigid_t;
 
 namespace ramon_slam2d
@@ -47,21 +56,13 @@ namespace ramon_slam2d
 	* @brief Clase para representar celdas.
 	*/
 
-  class SLAM2D
+  class SLAM2D : public MapUtils
   {
   public:
     /* Public functions */
     SLAM2D();
-    SLAM2D(uint32_t M, uint32_t N, float res);
+    SLAM2D(uint32_t M, uint32_t N, double res);
     ~SLAM2D();
-
-    void bresenhamLineAlgorithm(float x0, float y0, float x1, float y1, std::vector<geometry_msgs::Point32>& point);
-    float gaussianBlurIntegral(float a, float b, float c, float std);
-
-    float getLogitFromProba(float value);
-    float getProbaFromLogit(float value);
-
-    Eigen::Matrix2Xf rotateAndTranslate2D(Eigen::Matrix2Xf matrix, float x, float y, float theta);
 
     void start();
 
@@ -83,20 +84,26 @@ namespace ramon_slam2d
 
     // IMU usage
     bool use_imu_;
+    bool got_imu_data_;
 
     // Lidar counter and maximum distance value
     uint32_t laser_count_;
-    float rmax_;
+    double rmax_;
 
     // Map standard deviations (x,y)
-    float std_x_, std_y_;
+    Eigen::Vector2d std_dev_;
 
-    // Float map (not an occupancygrid one)
-    Eigen::MatrixXf map_eig_;
-    Eigen::MatrixXf map_eig_low_;
+    // number of maps
+    int maps_number_;
+    int current_map_;
+    // double map (not an occupancygrid one)
+    Eigen::MatrixXd map_eig_high_;
+    Eigen::MatrixXd map_eig_med_;
+    Eigen::MatrixXd map_eig_low_;
+    std::vector<Eigen::MatrixXd> map_eig_vec_;
 
     // Points that conforms a map
-    Eigen::Matrix2Xf map_points_;
+    Eigen::Matrix2Xd map_points_;
 
     // Occupancygrid Map
     nav_msgs::OccupancyGrid occmap_;
@@ -109,28 +116,32 @@ namespace ramon_slam2d
 
     // ROS Subscribers
     ros::Subscriber laser_sub_;
+    ros::Subscriber imu_sub_;
 
     // Threads
     boost::thread* transform_thread_;
-    float transform_publish_period_;
+    double transform_publish_period_;
 
     // Mutex
     boost::mutex laser_processing_mutex_;
 
     // Data from points
-    float point_free_, point_noinfo_, point_occupied_;
-    float point_dis_threshold_;
+    double point_dis_threshold_;
     uint32_t min_adjacent_points_;
 
     // Width (m_), height(n_) and resolution (res_)
     uint32_t m_, n_;
-    float res_, res_low_;
+    double res_high_, res_med_, res_low_;
+    Eigen::VectorXd res_vec_;
+    Eigen::VectorXd res_multipliers_;
 
     // Vehicle position (x,y) and angle
-    float x_, y_, theta_;
+    double x_, y_, theta_;
+    double imu_theta_;
+    double laser_imu_theta_;
 
     // Transform delay
-    float tf_delay_;
+    double tf_delay_;
 
     // Broadcaster transform
     tf::TransformBroadcaster tf_broadcaster_;
@@ -139,33 +150,24 @@ namespace ramon_slam2d
 
     /* Private functions */
 
-    // https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm
-    void bresenhamLineHigh(float x0, float y0, float x1, float y1, int direction,
-                          std::vector<geometry_msgs::Point32>& point);
-    void bresenhamLineLow(float x0, float y0, float x1, float y1, int direction,
-                          std::vector<geometry_msgs::Point32>& point);
-
-    int computeRigidTransform(const Eigen::Ref<const Eigen::Matrix2Xf> scan_points, Eigen::Matrix2Xf &scan_out);
-    int computeRigidTransform(const Eigen::Ref<const Eigen::MatrixXf> map_scan);
-
     int getMaximumLikelihoodTransform(int x_index, rigid_t& rigid);
 
-    void getOccupancyLikelihood(Eigen::Matrix3f& likelihood, Eigen::Vector2f point);
 
-    int getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xf &points_out);
+    int getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xd &points_out);
 
-    void getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xf> scan_points, Eigen::Matrix2Xf &scan_out);
-    int getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xf> scan_points, Eigen::Matrix2Xf &scan_out, int innecesario);
+    void getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan_points, Eigen::Matrix2Xd &scan_out);
 
     void init();
 
-    void inverseScanner(Eigen::Matrix2Xf scan_points, Eigen::MatrixXf &m, Eigen::MatrixXf &m_low);
+    void inverseScanner(Eigen::Matrix2Xd scan_points, Eigen::MatrixXd &m_high, Eigen::MatrixXd &m_med, Eigen::MatrixXd &m_low);
 
     void laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan);
 
-    void logitUpdate(Eigen::MatrixXf& m, uint32_t index_x, uint32_t index_y, Eigen::Vector2f point);
+    void inertialCallback(const sensor_msgs::Imu::ConstPtr& imu);
     
-    void mapUpdate(Eigen::MatrixXf scan_map);
+    void mapUpdate(const Eigen::Ref<const Eigen::MatrixXd> scan_map_high, const Eigen::Ref<const Eigen::MatrixXd> map_scan_low);
+
+    void mapUpdate(Eigen::Matrix2Xd scan_points);
 
     void publishTransform(void);
   };

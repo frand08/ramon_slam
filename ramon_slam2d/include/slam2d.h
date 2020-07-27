@@ -156,6 +156,7 @@ namespace ramon_slam2d
     int getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xd &points_out);
 
     void getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan_points, Eigen::Matrix2Xd &scan_out);
+    void getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan_points, Eigen::Matrix2Xd &scan_out, int mongo);
 
     void init();
 
@@ -168,6 +169,7 @@ namespace ramon_slam2d
     void mapUpdate(const Eigen::Ref<const Eigen::MatrixXd> scan_map_high, const Eigen::Ref<const Eigen::MatrixXd> map_scan_low);
 
     void mapUpdate(Eigen::Matrix2Xd scan_points);
+    void mapUpdate(Eigen::Matrix2Xd scan_points, int mongo);
 
     void publishTransform(void);
   };

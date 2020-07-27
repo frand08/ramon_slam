@@ -25,9 +25,14 @@ SLAM2D::SLAM2D() : transform_thread_(NULL), debug_(DEBUG_MODE), nh_("~")
   n_ = 50;
   float res = 0.02;
 
-  res_vec_.resize(6,1);
-  res_multipliers_.resize(6,1);
-  res_multipliers_ << 10,
+  res_vec_.resize(11,1);
+  res_multipliers_.resize(11,1);
+  res_multipliers_ << 20,
+                      18,
+                      16,
+                      14,
+                      12,
+                      10,
                       8,
                       6,
                       4,
@@ -57,8 +62,13 @@ SLAM2D::SLAM2D(uint32_t M, uint32_t N, double res) : transform_thread_(NULL), de
   res_med_ = 5 * res;
   res_low_ = 10 * res;
 
-  res_vec_.resize(6,1);
-  res_vec_ << 10 * res, 
+  res_vec_.resize(11,1);
+  res_vec_ << 20 * res, 
+              18 * res, 
+              16 * res, 
+              14 * res, 
+              12 * res, 
+              10 * res, 
               8 * res, 
               6 * res, 
               4 * res, 
@@ -363,6 +373,72 @@ void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan
 }
 
 /**
+ * @brief Computes rigid body transformations of the lidar data and returns the one that best matches with the map
+ * M(t-1)
+ *
+ * @param scan_in Input laser scanner
+ * @param scan_out Laser scanner transformed
+ */
+void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan_in, Eigen::Matrix2Xd &scan_out, int mongo)
+{
+  double x_out, y_out, theta_out;
+  double sum_out;
+  int i;
+  rigid_t rigid;
+  Eigen::Rotation2Dd rot2(laser_imu_theta_);
+
+  std::vector<boost::thread*> rigid_body_threads;
+
+  rigid.scan_in = scan_in;
+  rigid.x = x_;
+  rigid.y = y_;
+
+  if(use_imu_)
+    rigid.theta = laser_imu_theta_;
+  else
+    rigid.theta = theta_;
+
+  for(int map_index = 0; map_index < res_vec_.size(); map_index++)
+  {
+    rigid.sum_out = 10000.0;
+    // Start with the low resolution map
+    rigid.theta_factor = res_vec_(map_index) / res_vec_(0);
+    rigid.res = res_vec_(map_index);
+    rigid.map = map_eig_vec_[map_index];
+    for (i = -10; i <= 10; i++)
+    {
+      // Get the best rigid body transform, as the index being part of delta x
+      rigid_body_threads.push_back(
+          new boost::thread(&SLAM2D::getMaximumLikelihoodTransform, this, i, boost::ref(rigid)));
+    }
+
+    // delete created threads
+    for (i = 0; i < rigid_body_threads.size(); i++)
+    {
+      rigid_body_threads[i]->join();
+      delete rigid_body_threads[i];
+    }
+
+    rigid_body_threads.clear();
+
+    // Get best transform for high resolution map, based on low resolution map
+    rigid.x = rigid.x_out;
+    rigid.y = rigid.y_out;
+    rigid.theta = rigid.theta_out;
+  }
+
+  // Update pose data and output scan
+  x_ = rigid.x_out;
+  y_ = rigid.y_out;
+
+  theta_ = rigid.theta_out;
+
+  scan_out = rigid.scan_out;
+
+  ROS_INFO("(x_, y_, theta_) = (%f, %f, %f)", x_, y_, theta_);
+}
+
+/**
  * @brief Initializes the private variables of the class
  *
  */
@@ -449,7 +525,7 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   Eigen::Matrix2Xd scan_points, scan_transformed;
 
   // Para calcular tiempos del algoritmo
-  ros::WallTime start_, end_;
+  ros::WallTime start, end;
 
   Eigen::Rotation2Dd rot2(imu_theta_);
 
@@ -467,7 +543,7 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 
   got_imu_data_ = false;
   
-  start_ = ros::WallTime::now();
+  start = ros::WallTime::now();
 
   // Get all valid points
   this->getPointsFromScan(scan, scan_points);
@@ -481,7 +557,7 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
     // {
     //   return;      
     // }
-    this->getRigidBodyTransform(scan_points, scan_transformed);
+    this->getRigidBodyTransform(scan_points, scan_transformed,1);
   }
   else
   {
@@ -496,10 +572,10 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 
   last = now;
 
-  this->mapUpdate(scan_transformed);
+  this->mapUpdate(scan_transformed,1);
 
-  end_ = ros::WallTime::now();
-  double execution_time = (end_ - start_).toNSec() * 1e-6;
+  end = ros::WallTime::now();
+  double execution_time = (end - start).toNSec() * 1e-6;
   ROS_INFO_STREAM_COND(debug_ < 0, "Exectution time (ms): " << execution_time);
   map_pub_.publish(occmap_);
 }
@@ -707,6 +783,112 @@ void SLAM2D::mapUpdate(Eigen::Matrix2Xd scan_points)
 
       occmap_.data[MAP_IDX(occmap_.info.width, x + map_delta_high(0), y + map_delta_high(1))] =
           int8_t(map_eig_high_(x + map_delta_high(0), y + map_delta_high(1)) * 100);
+    }
+  }
+}
+
+
+/**
+ * @brief Updates saved map
+ *
+ * @param scan_points Scan points
+ */
+void SLAM2D::mapUpdate(Eigen::Matrix2Xd scan_points, int mongo)
+{
+  // Eigen::MatrixXd m_high, m_med, m_low;
+  Eigen::MatrixXd m;
+  // Index of each point in map
+  // Eigen::Vector2i index_high, index_med, index_low;
+  Eigen::Vector2i index_point;
+  // Points free between the vehicle and the measured obstacle
+  // std::vector<geometry_msgs::Point32> points_free_high, points_free_med, points_free_low;
+  std::vector<geometry_msgs::Point32> points_free;
+  // Point to be updated by the logit function in each step
+  Eigen::Vector2d point_update;
+  // Max and min values of the scan point vector
+  Eigen::Vector2d max_val_rows = scan_points.rowwise().maxCoeff();
+  Eigen::Vector2d min_val_rows = scan_points.rowwise().minCoeff();
+
+  // Map min size in x and y
+  // Eigen::Vector2d map_size_high, map_size_med, map_size_low;
+  Eigen::Vector2d map_size;
+  // Eigen::Vector2i map_delta_high, map_delta_med, map_delta_low;
+  Eigen::Vector2i map_delta;
+  
+  for(int map_index = 0; map_index < res_vec_.size(); map_index++)
+  {
+    /* FIXME: why is res_ not enough? */
+    // Get the max value of rows and cols
+    if (std::abs(max_val_rows(0)) >= std::abs(min_val_rows(0)))
+      map_size(0) = std::abs(max_val_rows(0)) + 10 * res_vec_(map_index);
+    else
+      map_size(0) = std::abs(min_val_rows(0)) + 10 * res_vec_(map_index);
+
+    if (std::abs(max_val_rows(1)) >= std::abs(min_val_rows(1)))
+      map_size(1) = std::abs(max_val_rows(1)) + 10 * res_vec_(map_index);
+    else
+      map_size(1) = std::abs(min_val_rows(1)) + 10 * res_vec_(map_index);
+
+    // Init map with no info value
+    m = Eigen::MatrixXd::Constant(uint32_t(round(2 * map_size(0) / res_vec_(map_index))), uint32_t(round(2 * map_size(1) / res_vec_(map_index))),
+                                  point_noinfo_);
+
+    // Update high resolution map
+    for (int i = 0; i < scan_points.cols(); i++)
+    {
+      // Get the free points between the vehicle and each laser point
+      this->bresenhamLineAlgorithm(0, 0, scan_points(0, i) / res_vec_(map_index), scan_points(1, i) / res_vec_(map_index), points_free);
+
+      if (points_free.size() > 0)
+      {
+        for (int index = 0; index < points_free.size() - 1; index++)
+        {
+          // Update free points in map
+          index_point(0) = uint32_t(round(round(map_size(0) / res_vec_(map_index)) + points_free[index].x));
+          index_point(1) = uint32_t(round(round(map_size(1) / res_vec_(map_index)) + points_free[index].y));
+
+          m(index_point(0), index_point(1)) =
+              this->getProbaFromLogit(this->getLogitFromProba(point_free_) +
+                                      this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
+        }
+      }
+      index_point(0) = uint32_t(round(round(map_size(0) / res_vec_(map_index)) + scan_points(0, i) / res_vec_(map_index)));
+      index_point(1) = uint32_t(round(round(map_size(1) / res_vec_(map_index)) + scan_points(1, i) / res_vec_(map_index)));
+
+      // Update occupied points in map
+      
+      // Update around point option (3x3 matrix)
+      // point_update(0) = scan_points(0, i) / res_vec_(map_index);
+      // point_update(1) = scan_points(1, i) / res_vec_(map_index);
+      // this->logitUpdate(m, index_point, point_update, std_dev_, res_vec_(map_index));
+
+      // One point update option
+      m(index_point(0), index_point(1)) =
+          this->getProbaFromLogit(this->getLogitFromProba(point_occupied_) +
+                                  this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
+
+      // Clear free points vector
+      points_free.clear();
+    }
+
+    map_delta(0) = int(round(0.5 * (m_ / res_vec_(map_index) - m.rows())));
+    map_delta(1) = int(round(0.5 * (n_ / res_vec_(map_index) - m.cols())));
+
+    for (int x = 0; x < m.rows(); x++)
+    {
+      for (int y = 0; y < m.cols(); y++)
+      {
+        // Update stored map with current measurement
+        map_eig_vec_[map_index](x + map_delta(0), y + map_delta(1)) = this->getProbaFromLogit(
+            this->getLogitFromProba(m(x, y)) +
+            this->getLogitFromProba(map_eig_vec_[map_index](x + map_delta(0), y + map_delta(1))) - this->getLogitFromProba(point_noinfo_));
+
+        if(map_index == res_vec_.size()-1)
+        {
+          occmap_.data[MAP_IDX(occmap_.info.width, x + map_delta(0), y + map_delta(1))] =
+              int8_t(map_eig_vec_[map_index](x + map_delta(0), y + map_delta(1)) * 100);
+        }
+      }
     }
   }
 }

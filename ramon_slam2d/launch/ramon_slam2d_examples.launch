@@ -3,9 +3,9 @@
       <!-- casa_mercedes/2019-09-30_living_arriba_1hz.bag -->
       <!-- depto_piezafondo/_2019-10-14-10-38-58_pieza_fondo_1hz.bag -->
       <!-- depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag -->
-      <!-- <arg name="BagFile"           default="depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag"/> -->
+      <arg name="BagFile"           default="depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag"/>
       <!-- <arg name="BagFile"           default="floors/floor1.bag"/> -->
-      <arg name="BagFile"           default="cartographer_records/test5.bag"/>
+      <!-- <arg name="BagFile"           default="cartographer_records/test5.bag"/> -->
 	
       <arg name="isSweep"	      default="false"/>
 	<arg name="isRecord"	      default="false"/>
@@ -14,6 +14,8 @@
 	<arg name="isRVizPC"	      default="false"/>
 	<arg name="isRVizOG"	      default="true"/>
 	<arg name="isTransform"	      default="true"/>
+	<!-- <arg name="BagRate"	      default="0.05"/> -->
+	<arg name="BagRate"	      default="0.1"/>
 
     <node if="$(arg isRecord)" pkg="rosbag" type="record" name="rosbag_record_robot"
        args="record -o $(find ramon_slam2d)/bagfiles/
@@ -22,7 +24,7 @@
     <param if="$(arg isPlayBack)" name="/use_sim_time" value="true"/>
     
     <node if="$(arg isPlayBack)" pkg="rosbag" type="play" name="rosbag_play_robot"
-       args="--clock --rate=0.05 $(find ramon_slam2d)/bagfiles/$(arg BagFile)"
+       args="--clock --rate=$(arg BagRate) $(find ramon_slam2d)/bagfiles/$(arg BagFile)"
     />
     <!-- run sweep_node node -->
     <node if="$(arg isSweep)" name="sweep_node" pkg="sweep_ros" type="sweep_node" output="screen">
@@ -92,9 +94,9 @@
         type="slam2d" 
         output="screen"
         clear_params="true">
-      <param name="scan_topic_name" type="string" value="/f_scan"/>
+      <!-- <param name="scan_topic_name" type="string" value="/f_scan"/> -->
       <!-- <param name="imu_topic_name" type="string" value="/imu_data"/> -->
-      <param name="base_frame" type="string" value="/base_footprint"/>
+      <!-- <param name="base_frame" type="string" value="/base_footprint"/> -->
   </node>
 
 	<!-- Visualisation RVIZ for PointCloud -->

@@ -1,0 +1,13 @@
+Debug
+Drivers
+startup
+.settings
+Inc/ros_libs
+
+STM32F4DISCOVERY.xml
+*.cfg
+STM32F407VGTx_FLASH.ld
+.cproject
+.project
+.mxproject
+

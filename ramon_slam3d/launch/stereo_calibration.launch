@@ -1,0 +1,44 @@
+<!-- stereo_camera_calib.launch -->
+<launch>
+	<!-- chessboard size as NxM, counting interior corners -->
+	<arg name="size" 		default="8x6" />
+
+	<!-- chessboard square size in meters -->
+	<arg name="square" 		default="0.108" />
+
+	<!-- allow specified slop (in seconds) when pairing images from unsynchronized stereo cameras -->
+	<arg name="approximate" default="0.01" />
+
+	<!-- camera parameters. Change them accordingly -->
+	<arg name="width"		default="320" />
+	<arg name="height"		default="240" />
+	<arg name="fps"			default="30" />
+
+	<group ns="stereo">
+	    <include file="$(find ramon_slam3d)/launch/stereo_camera.launch" >
+			<!-- set left/right camera device and calibration url -->
+			<arg name="right_camera_dev"	value="/dev/video2" />
+			<arg name="left_camera_dev"		value="/dev/video4" />
+
+			<!-- Set camera location -->
+			<arg name="stereo_camera_loc" 	value="minoru_camera_info/20200318_320x240" />
+
+			<!-- set image size -->
+			<arg name="image_width"			value="$(arg width)" />
+			<arg name="image_height"		value="$(arg height)" />
+
+			<!-- set camera parameters -->
+			<arg name="fps"					value="$(arg fps)" />
+		</include>
+
+		<node name="calibrator" pkg="camera_calibration" type="cameracalibrator.py"
+			args="--size $(arg size) --square $(arg square) --approximate=$(arg approximate)"
+			output="screen" clear_params="true">
+			<remap from="left" to="/stereo/left/image_raw" />
+			<remap from="right" to="/stereo/right/image_raw" />
+			<remap from="left_camera" to="/stereo/left" />
+			<remap from="right_camera" to="/stereo/right" />
+		</node>
+	</group>
+</launch>
+

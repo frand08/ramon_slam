@@ -1,0 +1,41 @@
+<!-- stereo_camera.launch -->
+<launch>
+
+	<!-- set left/right camera device and calibration url -->
+	<arg name="right_camera_dev"	default="/dev/video2" />
+	<arg name="left_camera_dev"		default="/dev/video4" />
+
+	<!-- Set camera location -->
+	<arg name="stereo_camera_loc" 	default="minoru_camera_info/20200318_320x240" />
+	<arg name="stereo_camera_url"	value="$(find ramon_slam3d)/info/$(arg stereo_camera_loc)" />
+
+	<!-- set image size -->
+	<arg name="image_width"			default="320" />
+	<arg name="image_height"		default="240" />
+	
+	<!-- set camera parameters -->
+	<arg name="fps"					default="30" />
+	<arg name="skip_frames"			value="0" />
+	<!-- <arg name="frame_id"		value="stereo_camera" /> -->
+
+	<node pkg="uvc_camera" type="uvc_stereo_node" name="stereo_cam" output="screen">
+		<!-- left camera params -->
+		<param name="left/device"			type="string"	value="$(arg left_camera_dev)"/>
+		<param name="left/camera_info_url"	type="string" 	value="file://$(arg stereo_camera_url)/left_camera.yaml" />
+		<param name="left/rotate"			type="bool" 	value="false" />
+
+		<!-- right camera params -->
+		<param name="right/device"			type="string"	value="$(arg right_camera_dev)"/>
+		<param name="right/camera_info_url"	type="string" 	value="file://$(arg stereo_camera_url)/right_camera.yaml" />
+		<param name="right/rotate"			type="bool" 	value="false" />
+
+		<!-- general params -->
+		<param name="fps"               	value="$(arg fps)"/>
+		<param name="width"			    	value="$(arg image_width)"/>
+		<param name="height"				value="$(arg image_height)"/>
+		<param name="skip_frames"        	value="$(arg skip_frames)" />
+		<!-- <param name="frame_id"	        	type="string"	value="$(arg frame_id)" /> -->
+	</node>
+
+</launch>
+

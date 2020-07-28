@@ -14,7 +14,7 @@
 	<arg name="isRVizPC"	      default="false"/>
 	<arg name="isRVizOG"	      default="true"/>
 	<arg name="isTransform"	      default="true"/>
-	<!-- <arg name="BagRate"	      default="0.05"/> -->
+	<!-- <arg name="BagRate"	      default="0.01"/> -->
 	<arg name="BagRate"	      default="0.1"/>
 
     <node if="$(arg isRecord)" pkg="rosbag" type="record" name="rosbag_record_robot"

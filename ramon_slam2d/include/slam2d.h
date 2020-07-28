@@ -110,6 +110,9 @@ namespace ramon_slam2d
 
     int debug_;
 
+    // Number of maps
+    int map_count_;
+
     // ROS Publishers
     ros::Publisher map_pub_;
     ros::Publisher map_meta_pub_;
@@ -131,7 +134,7 @@ namespace ramon_slam2d
 
     // Width (m_), height(n_) and resolution (res_)
     uint32_t m_, n_;
-    double res_high_, res_med_, res_low_;
+    
     Eigen::VectorXd res_vec_;
     Eigen::VectorXd res_multipliers_;
 
@@ -156,9 +159,8 @@ namespace ramon_slam2d
     int getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xd &points_out);
 
     void getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan_points, Eigen::Matrix2Xd &scan_out);
-    void getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan_points, Eigen::Matrix2Xd &scan_out, int mongo);
 
-    void init();
+    void init(double res);
 
     void inverseScanner(Eigen::Matrix2Xd scan_points, Eigen::MatrixXd &m_high, Eigen::MatrixXd &m_med, Eigen::MatrixXd &m_low);
 
@@ -169,7 +171,6 @@ namespace ramon_slam2d
     void mapUpdate(const Eigen::Ref<const Eigen::MatrixXd> scan_map_high, const Eigen::Ref<const Eigen::MatrixXd> map_scan_low);
 
     void mapUpdate(Eigen::Matrix2Xd scan_points);
-    void mapUpdate(Eigen::Matrix2Xd scan_points, int mongo);
 
     void publishTransform(void);
   };

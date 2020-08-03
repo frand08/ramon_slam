@@ -25,14 +25,15 @@
     MapUtils();
     ~MapUtils();
 
-    void bresenhamLineAlgorithm(double x0, double y0, double x1, double y1, std::vector<geometry_msgs::Point32>& point);
+    int bresenhamLineAlgorithm(double x0, double y0, double x1, double y1, std::vector<geometry_msgs::Point32>& point);
+    double gaussianBlur1D(double a, double b, double std_dev);
     double gaussianBlurIntegral(double a, double b, double c, double std);
       
     void getOccupancyLikelihood(Eigen::Matrix3d& likelihood, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res);
 
     double getLogitFromProba(double value);
     double getProbaFromLogit(double value);
-    void logitUpdate(Eigen::MatrixXd& m, Eigen::Vector2i index, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res);
+    void logitUpdate(Eigen::Ref<Eigen::MatrixXd> m, Eigen::Vector2i index, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res);
 
     Eigen::Matrix2Xd rotateAndTranslate2D(Eigen::Matrix2Xd matrix, double x, double y, double theta);
 

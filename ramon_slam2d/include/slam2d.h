@@ -140,6 +140,7 @@ namespace ramon_slam2d
 
     // Vehicle position (x,y) and angle
     double x_, y_, theta_;
+    int x_iteration_, y_iteration_, theta_iteration_;
     double imu_theta_;
     double laser_imu_theta_;
 
@@ -153,7 +154,7 @@ namespace ramon_slam2d
 
     /* Private functions */
 
-    int getMaximumLikelihoodTransform(int x_index, rigid_t& rigid);
+    int getMaximumLikelihoodTransform(int theta_index, rigid_t& rigid);
 
 
     int getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xd &points_out);
@@ -162,15 +163,11 @@ namespace ramon_slam2d
 
     void init(double res);
 
-    void inverseScanner(Eigen::Matrix2Xd scan_points, Eigen::MatrixXd &m_high, Eigen::MatrixXd &m_med, Eigen::MatrixXd &m_low);
-
     void laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan);
 
     void inertialCallback(const sensor_msgs::Imu::ConstPtr& imu);
     
-    void mapUpdate(const Eigen::Ref<const Eigen::MatrixXd> scan_map_high, const Eigen::Ref<const Eigen::MatrixXd> map_scan_low);
-
-    void mapUpdate(Eigen::Matrix2Xd scan_points);
+    void mapsUpdate(Eigen::Matrix2Xd scan_points);
 
     void publishTransform(void);
   };

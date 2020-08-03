@@ -74,13 +74,13 @@ void SLAM2D::start()
 /* Private functions */
 
 /**
- * @brief Gets the maximum likelihood transform for a given delta x
+ * @brief Gets the maximum likelihood transform for a given theta index
  *
- * @param x_index delta x
+ * @param theta_index index of angle
  * @param rigid Information about the input scan, offsets and output scans (reference)
  * @return int zero value
  */
-int SLAM2D::getMaximumLikelihoodTransform(int x_index, rigid_t& rigid)
+int SLAM2D::getMaximumLikelihoodTransform(int theta_index, rigid_t& rigid)
 {
   double delta_x;
   double delta_y;
@@ -88,62 +88,57 @@ int SLAM2D::getMaximumLikelihoodTransform(int x_index, rigid_t& rigid)
   double sum;
   int index_x, index_y;
   Eigen::Matrix2Xd scan_aux;
-  scan_aux.resize(2, scan_aux.cols());
+  double aux;
+  Eigen::Rotation2Dd rot2(aux);
+
+  scan_aux.resize(2, rigid.scan_in.cols());
+
+  // Define the steps of each parameter iteration
   delta_x = rigid.res / 4;
   delta_y = rigid.res / 4;
   delta_theta = rigid.theta_factor * M_PI / 360;
 
-  for (int y_index = -10; y_index <= 10; y_index++)
-  {
-    // if(!use_imu_)
-    {
-      for (int theta_index = -10; theta_index <= 10; theta_index++)
-      {
-        scan_aux = this->rotateAndTranslate2D(rigid.scan_in, (rigid.x + x_index * delta_x), (rigid.y + y_index * delta_y),
-                                              (rigid.theta + theta_index * delta_theta));
-        sum = 0.0;
-        for (int m = 0; m < scan_aux.cols(); m++)
-        {
-          index_x = int(round((m_ / 2 + scan_aux(0, m)) / rigid.res));
-          index_y = int(round((n_ / 2 + scan_aux(1, m)) / rigid.res));
-          sum += pow((1 - rigid.map(index_x, index_y)), 2);
-        }
+  // Compute the rotation first
+  aux = theta_index * delta_theta + rigid.theta;
 
-        laser_processing_mutex_.lock();
-        if (sum < rigid.sum_out)
-        {
-          rigid.x_out = rigid.x + x_index * delta_x;
-          rigid.y_out = rigid.y + y_index * delta_y;
-          rigid.theta_out = rigid.theta + theta_index * delta_theta;
-          rigid.sum_out = sum;
-          rigid.scan_out = scan_aux;
-        }
-        laser_processing_mutex_.unlock();
-      }
-    }
-    // else
-    // {
-    //   scan_aux = this->rotateAndTranslate2D(rigid.scan_in, (rigid.x + x_index * delta_x), (rigid.y + y_index * delta_y), 0.0);
-    //   sum = 0.0;
-    //   for (int m = 0; m < scan_aux.cols(); m++)
-    //   {
-    //     index_x = int(round((m_ / 2 + scan_aux(0, m)) / rigid.res));
-    //     index_y = int(round((n_ / 2 + scan_aux(1, m)) / rigid.res));
-    //     sum += pow((1 - rigid.map(index_x, index_y)), 2);
-    //   }
-
-    //   laser_processing_mutex_.lock();
-    //   if (sum < rigid.sum_out)
-    //   {
-    //     rigid.x_out = rigid.x + x_index * delta_x;
-    //     rigid.y_out = rigid.y + y_index * delta_y;
-    //     rigid.sum_out = sum;
-    //     rigid.scan_out = scan_aux;
-    //   }
-    //   laser_processing_mutex_.unlock();
-    // }
+  if(aux != 0)
+    scan_aux = rot2.toRotationMatrix() * rigid.scan_in;
+  else
+    scan_aux = rigid.scan_in;
     
+  // Then iterate over the traslations
+  for (int x_index = -x_iteration_; x_index <= x_iteration_; x_index++)
+  {
+    // Compute x traslaton
+    scan_aux.row(0) = rigid.scan_in.row(0) + Eigen::MatrixXd::Constant(1, rigid.scan_in.cols(), x_index);
+    for (int y_index = -y_iteration_; y_index <= y_iteration_; y_index++)
+    {
+      // Compute y traslation
+      scan_aux.row(1) = rigid.scan_in.row(1) + Eigen::MatrixXd::Constant(1, rigid.scan_in.cols(), y_index);
+
+      // Get values of points in map
+      sum = 0.0;
+      for (int m = 0; m < scan_aux.cols(); m++)
+      {
+        index_x = int(round((m_ / 2 + scan_aux(0, m)) / rigid.res));
+        index_y = int(round((n_ / 2 + scan_aux(1, m)) / rigid.res));
+        sum += pow((1 - rigid.map(index_x, index_y)), 2);
+      }
+
+      // If the sum is the smallest so far, save the parameters
+      laser_processing_mutex_.lock();
+      if (sum < rigid.sum_out)
+      {
+        rigid.x_out = rigid.x + x_index * delta_x;
+        rigid.y_out = rigid.y + y_index * delta_y;
+        rigid.theta_out = rigid.theta + theta_index * delta_theta;
+        rigid.sum_out = sum;
+        rigid.scan_out = scan_aux;
+      }
+      laser_processing_mutex_.unlock();
+    }
   }
+
   return 0;
 }
 
@@ -172,7 +167,8 @@ int SLAM2D::getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xd &poi
   // Get the points that belong to contours
   for (i = 0; i < scan.ranges.size(); i++)
   {
-    if (scan.ranges[i] < scan.range_max && scan.ranges[i] > scan.range_min && !isinf(scan.ranges[i]))
+    // if (scan.ranges[i] < scan.range_max && scan.ranges[i] > scan.range_min && !isinf(scan.ranges[i]))
+    if (scan.ranges[i] < 5.0 && scan.ranges[i] > scan.range_min && !isinf(scan.ranges[i]))
     {
       // Convert scan to point (x,y)
       scan_points(0, i) = -(sin(angles[i]) * scan.ranges[i]);
@@ -193,8 +189,8 @@ int SLAM2D::getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xd &poi
         else
           pointmod_res = pointmod_next - pointmod_reg;
 
-        // If the rest of the module of the two contiguous points is less than the threshold, then they can be part of a
-        // contour
+        // If the rest of the module of the two contiguous points is less than the threshold, 
+        //then they can be part of a contour
         if (pointmod_res < point_dis_threshold_)
         {
           // Save point i-1 in case its the starting point of a new contour
@@ -208,8 +204,8 @@ int SLAM2D::getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xd &poi
         }
         else
         {
-          // If there are at least min_adjacent_points_ contiguous points, they are considered to belong to a valid
-          // contour.
+          // If there are at least min_adjacent_points_ contiguous points, 
+          //they are considered to belong to a valid contour.
           if (points_aux >= min_adjacent_points_)
           {
             // Move points index points_aux times, otherwise they will be ovewritten
@@ -264,7 +260,7 @@ void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan
     rigid.theta_factor = res_vec_(map_index) / res_vec_(0);
     rigid.res = res_vec_(map_index);
     rigid.map = map_eig_vec_[map_index];
-    for (i = -10; i <= 10; i++)
+    for (i = -theta_iteration_; i <= theta_iteration_; i++)
     {
       // Get the best rigid body transform, as the index being part of delta x
       rigid_body_threads.push_back(
@@ -298,11 +294,28 @@ void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan
 }
 
 /**
+ * @brief Callback function of the imu topic
+ *
+ * @param scanptr Pointer to imu data
+ */
+void SLAM2D::inertialCallback(const sensor_msgs::Imu::ConstPtr& imuptr)
+{
+  tf::Quaternion q(imuptr->orientation.x, imuptr->orientation.y, imuptr->orientation.z, imuptr->orientation.w);
+  tf::Matrix3x3 m(q);
+  double pitch, roll, yaw;
+  m.getRPY(roll, pitch, yaw);
+  imu_theta_ = yaw;
+  got_imu_data_ = true;
+}
+
+/**
  * @brief Initializes the private variables of the class
  *
  */
 void SLAM2D::init(double res)
 {
+  double std_dev;
+
   laser_count_ = 0;
   transform_publish_period_ = 0.05;
 
@@ -311,6 +324,10 @@ void SLAM2D::init(double res)
   point_occupied_ = 0.7;
   point_dis_threshold_ = 0.1;
   min_adjacent_points_ = 5;
+
+  x_iteration_ = 5;
+  y_iteration_ = 5;
+  theta_iteration_ = 5;
 
   // Define slam frames in case they were not given by user
   if (!nh_.getParam("base_frame", base_frame_))
@@ -329,6 +346,20 @@ void SLAM2D::init(double res)
     use_imu_ = true;
   if (!nh_.getParam("map_count", map_count_))
     map_count_ = 3;
+  if (!nh_.getParam("std_dev", std_dev))
+    std_dev = 0.1;
+
+  ROS_INFO("Params:");
+  std::cout << "base_frame: " << base_frame_ << std::endl;
+  std::cout << "map_frame: " << map_frame_ << std::endl;
+  std::cout << "imu_frame: " << imu_frame_ << std::endl;
+  std::cout << "tf_delay: " << tf_delay_ << std::endl;
+  std::cout << "scan_topic_name: " << scan_topic_name_ << std::endl;
+  std::cout << "use_imu: " << use_imu_ << std::endl;
+  if(use_imu_)
+    std::cout << "imu_topic_name: " << imu_topic_name_ << std::endl;
+  std::cout << "map_count: " << map_count_ << std::endl;
+  std::cout << "std_dev: " << std_dev << std::endl;
 
   // Set the resolution vector
   res_vec_.resize(map_count_,1);
@@ -338,13 +369,11 @@ void SLAM2D::init(double res)
   res_multipliers_(map_count_-1) = 1;
   res_vec_ << res_multipliers_ * res;
 
-  ROS_INFO_STREAM("use imu:" << use_imu_);
-
   for(int i = 0; i < res_vec_.size(); i++)
     map_eig_vec_.push_back(Eigen::MatrixXd::Constant(uint32_t(round(m_ / res_vec_(res_vec_.size()-1))), uint32_t(round(n_ / res_vec_(res_vec_.size()-1))), point_noinfo_));
 
-  std_dev_(0) = 0.01;
-  std_dev_(1) = 0.01;
+  std_dev_(0) = std_dev;
+  std_dev_(1) = std_dev;
 
   x_ = 0.0;
   y_ = 0.0;
@@ -427,7 +456,7 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 
   last = now;
 
-  this->mapUpdate(scan_transformed);
+  this->mapsUpdate(scan_transformed);
 
   end = ros::WallTime::now();
   double execution_time = (end - start).toNSec() * 1e-6;
@@ -436,34 +465,16 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 }
 
 /**
- * @brief Callback function of the imu topic
- *
- * @param scanptr Pointer to imu data
- */
-void SLAM2D::inertialCallback(const sensor_msgs::Imu::ConstPtr& imuptr)
-{
-  tf::Quaternion q(imuptr->orientation.x, imuptr->orientation.y, imuptr->orientation.z, imuptr->orientation.w);
-  tf::Matrix3x3 m(q);
-  double pitch, roll, yaw;
-  m.getRPY(roll, pitch, yaw);
-  imu_theta_ = yaw;
-  got_imu_data_ = true;
-}
-
-/**
- * @brief Updates saved map
+ * @brief Updates saved maps
  *
  * @param scan_points Scan points
  */
-void SLAM2D::mapUpdate(Eigen::Matrix2Xd scan_points)
+void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
 {
-  // Eigen::MatrixXd m_high, m_med, m_low;
   Eigen::MatrixXd m;
   // Index of each point in map
-  // Eigen::Vector2i index_high, index_med, index_low;
   Eigen::Vector2i index_point;
   // Points free between the vehicle and the measured obstacle
-  // std::vector<geometry_msgs::Point32> points_free_high, points_free_med, points_free_low;
   std::vector<geometry_msgs::Point32> points_free;
   // Point to be updated by the logit function in each step
   Eigen::Vector2d point_update;
@@ -472,11 +483,12 @@ void SLAM2D::mapUpdate(Eigen::Matrix2Xd scan_points)
   Eigen::Vector2d min_val_rows = scan_points.rowwise().minCoeff();
 
   // Map min size in x and y
-  // Eigen::Vector2d map_size_high, map_size_med, map_size_low;
   Eigen::Vector2d map_size;
-  // Eigen::Vector2i map_delta_high, map_delta_med, map_delta_low;
   Eigen::Vector2i map_delta;
   
+  double gauss;
+
+  // Update each submap
   for(int map_index = 0; map_index < res_vec_.size(); map_index++)
   {
     /* FIXME: why is res_ not enough? */
@@ -499,37 +511,54 @@ void SLAM2D::mapUpdate(Eigen::Matrix2Xd scan_points)
     for (int i = 0; i < scan_points.cols()-1; i++)
     {
       // Get the free points between the vehicle and each laser point
-      // this->bresenhamLineAlgorithm(0, 0, scan_points(0, i) / res_vec_(map_index), scan_points(1, i) / res_vec_(map_index), points_free);
+      int ret_bres = this->bresenhamLineAlgorithm(x_ / res_vec_(map_index), 
+                                                  y_ / res_vec_(map_index), 
+                                                  scan_points(0, i) / res_vec_(map_index), 
+                                                  scan_points(1, i) / res_vec_(map_index), 
+                                                  points_free);
 
-      // if (points_free.size() > 1)
-      // {
-      //   // As we update around the point, obtaining a 3x3 matrix, points_free.size()-2 is needed instead of points_free.size()-1
-      //   for (int index = 0; index < points_free.size() - 2; index++)
-      //   {
-      //     // Update free points in map
-      //     index_point(0) = uint32_t(round(round(map_size(0) / res_vec_(map_index)) + points_free[index].x));
-      //     index_point(1) = uint32_t(round(round(map_size(1) / res_vec_(map_index)) + points_free[index].y));
+      if (points_free.size() > 1)
+      {
+        // As we update around the point, obtaining a 3x3 matrix, points_free.size()-2 is needed instead of points_free.size()-1
+        for (int index = 0; index < points_free.size(); index++)
+        {
+          // Update free points in map
+          // Center of map + point
+          index_point(0) = uint32_t(round(round(map_size(0) / res_vec_(map_index)) + points_free[index].x));
+          index_point(1) = uint32_t(round(round(map_size(1) / res_vec_(map_index)) + points_free[index].y));
 
-      //     m(index_point(0), index_point(1)) =
-      //         this->getProbaFromLogit(this->getLogitFromProba(point_free_) +
-      //                                 this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
-      //   }
-      // }
+          // gauss = (abs((1/(2*M_PI*std_dev_(0)) * exp(-pow(points_free[index].x - points_free[points_free.size()-1].x,2) / (2*std_dev_(0)*std_dev_(0)))) *
+          //                  (1/(2*M_PI*std_dev_(1)) * exp(-pow(points_free[index].y - points_free[points_free.size()-1].y,2) / (2*std_dev_(1)*std_dev_(1))))
+          //                 ));
+          gauss = abs(this->gaussianBlur1D(points_free[index].x, points_free[points_free.size()-1].x, std_dev_(0)) *
+                      this->gaussianBlur1D(points_free[index].y, points_free[points_free.size()-1].y, std_dev_(1)));
+
+          m(index_point(0), index_point(1)) =
+              // this->getProbaFromLogit(this->getLogitFromProba(point_free_) +
+              //                         this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
+              this->getProbaFromLogit(this->getLogitFromProba(gauss) +
+                                      this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
+        }
+      }
       index_point(0) = uint32_t(round(round(map_size(0) / res_vec_(map_index)) + scan_points(0, i) / res_vec_(map_index)));
       index_point(1) = uint32_t(round(round(map_size(1) / res_vec_(map_index)) + scan_points(1, i) / res_vec_(map_index)));
 
       // Update occupied points in map
       
-      // Update around point option (3x3 matrix)
-      point_update(0) = scan_points(0, i) / res_vec_(map_index);
-      point_update(1) = scan_points(1, i) / res_vec_(map_index);
-      this->logitUpdate(m, index_point, point_update, std_dev_, res_vec_(map_index));
-
-      // One point update option
-      // m(index_point(0), index_point(1)) =
-      //     this->getProbaFromLogit(this->getLogitFromProba(point_occupied_) +
-      //                             this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
-
+      if(map_index == res_vec_.size())
+      {
+        // Update around point option (3x3 matrix)
+        point_update(0) = scan_points(0, i) / res_vec_(map_index);
+        point_update(1) = scan_points(1, i) / res_vec_(map_index);
+        this->logitUpdate(m, index_point, point_update, std_dev_, res_vec_(map_index));
+      }
+      else
+      {
+        // One point update option
+        m(index_point(0), index_point(1)) =
+            this->getProbaFromLogit(this->getLogitFromProba(point_occupied_) +
+                                    this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
+      }
       // Clear free points vector
       points_free.clear();
     }
@@ -546,7 +575,9 @@ void SLAM2D::mapUpdate(Eigen::Matrix2Xd scan_points)
             this->getLogitFromProba(m(x, y)) +
             this->getLogitFromProba(map_eig_vec_[map_index](x + map_delta(0), y + map_delta(1))) - this->getLogitFromProba(point_noinfo_));
 
-        if(map_index == res_vec_.size()-1)
+        // if(map_index == res_vec_.size()-1)
+        if(map_index == res_vec_.size()-1 || map_index == 0)
+        // if(map_index == 0)
         {
           occmap_.data[MAP_IDX(occmap_.info.width, x + map_delta(0), y + map_delta(1))] =
               int8_t(map_eig_vec_[map_index](x + map_delta(0), y + map_delta(1)) * 100);

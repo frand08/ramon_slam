@@ -11,6 +11,8 @@
 
 #include "map_utils.h"
 
+/* Public Functions */
+
 /**
  * @brief Construct a new MapUtils::MapUtils object
  *
@@ -36,19 +38,23 @@ MapUtils::~MapUtils()
  * @param y0
  * @param x1
  * @param y1
+ * @param res
  * @param point
  */
-void MapUtils::bresenhamLineAlgorithm(double x0, double y0, double x1, double y1,
+int MapUtils::bresenhamLineAlgorithm(double x0, double y0, double x1, double y1,
                                          std::vector<geometry_msgs::Point32>& point)
 {
+  int ret = -1;
   if (abs(y1 - y0) < abs(x1 - x0))
   {
     if (x0 > x1)
     {
+      ret = 0;
       this->bresenhamLineLow(x1, y1, x0, y0, 1, point);
     }
     else
     {
+      ret = 1;
       this->bresenhamLineLow(x0, y0, x1, y1, 0, point);
     }
   }
@@ -56,13 +62,32 @@ void MapUtils::bresenhamLineAlgorithm(double x0, double y0, double x1, double y1
   {
     if (y0 > y1)
     {
+      ret = 2;
       this->bresenhamLineHigh(x1, y1, x0, y0, 1, point);
     }
     else
     {
+      ret = 3;
       this->bresenhamLineHigh(x0, y0, x1, y1, 0, point);
     }
   }
+  return ret;
+}
+
+/**
+ * @brief Obtains the Gaussian Blur Integral
+ *
+ * @param a
+ * @param b
+ * @param c
+ * @param std
+ * @return double
+ */
+double MapUtils::gaussianBlur1D(double x0, double x1, double std_dev)
+{
+  // Qian2019 - P.7
+  // erf: error function
+  return (1/(2*M_PI*std_dev) * exp(-pow(x0 - x1,2) / (2*std_dev*std_dev)));
 }
 
 /**
@@ -109,7 +134,7 @@ double MapUtils::getProbaFromLogit(double value)
   return (std::exp(value) / (1 + std::exp(value)));
 }
 
-/* Private */
+/* Private Functions */
 
 
 /**
@@ -212,7 +237,7 @@ void MapUtils::bresenhamLineLow(double x0, double y0, double x1, double y1, int 
  * @param index_y Index y of the point in the map
  * @param point Point value
  */
-void MapUtils::logitUpdate(Eigen::MatrixXd& m, Eigen::Vector2i index, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res)
+void MapUtils::logitUpdate(Eigen::Ref<Eigen::MatrixXd> m, Eigen::Vector2i index, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res)
 {
   double logit_t0 = this->getLogitFromProba(point_noinfo_);
   Eigen::Matrix3d likelihood;
@@ -288,6 +313,35 @@ void MapUtils::getOccupancyLikelihood(Eigen::Matrix3d& likelihood, Eigen::Vector
   likelihood(2, 0) = point_occupied_ * (1 - abs(Px1x2 * Py1y2));  // 6
   likelihood(2, 1) = point_occupied_ * (1 - abs(Px2x3 * Py1y2));  // 7
   likelihood(2, 2) = point_occupied_ * (1 - abs(Px3x4 * Py1y2));  // 8
+
+  likelihood(0, 0) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(res,2) / (2*std_dev(0)*std_dev(0)))) *
+                     (1/(2*M_PI*std_dev(1)) * exp(-pow(res,2) / (2*std_dev(1)*std_dev(1))))
+                     ));
+  likelihood(0,2) = likelihood(0,0);
+  likelihood(2,0) = likelihood(0,0);
+  likelihood(2,2) = likelihood(0,0);
+  likelihood(1,0) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(0,2) / (2*std_dev(0)*std_dev(0)))) *
+                     (1/(2*M_PI*std_dev(1)) * exp(-pow(res,2) / (2*std_dev(1)*std_dev(1))))
+                     ));
+  likelihood(1,2) = likelihood(1,0);
+  likelihood(0,1) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(res,2) / (2*std_dev(0)*std_dev(0)))) *
+                     (1/(2*M_PI*std_dev(1)) * exp(-pow(0,2) / (2*std_dev(1)*std_dev(1))))
+                     ));
+  likelihood(2,1) = likelihood(0,1);
+  likelihood(1,1) = point_occupied_;
+
+
+  likelihood(0,0) = point_occupied_ * 0.8;
+  likelihood(0,1) = likelihood(0,0);
+  likelihood(0,2) = likelihood(0,0);
+  likelihood(1,0) = likelihood(0,0);
+  likelihood(1,1) = point_occupied_;
+  likelihood(1,2) = likelihood(0,0);
+  likelihood(2,0) = likelihood(0,0);
+  likelihood(2,1) = likelihood(0,0);
+  likelihood(2,2) = likelihood(0,0);
+  
+
 }
 
 

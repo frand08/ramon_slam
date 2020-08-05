@@ -23,6 +23,8 @@
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Point32.h>
 #include <nav_msgs/OccupancyGrid.h>
+#include <nav_msgs/Odometry.h>
+#include <nav_msgs/Path.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <fstream>
@@ -81,10 +83,14 @@ namespace ramon_slam2d
     // Topic names
     std::string scan_topic_name_;
     std::string imu_topic_name_;
+    std::string ground_truth_topic_name_;
 
     // IMU usage
     bool use_imu_;
     bool got_imu_data_;
+
+    // Odom usage
+    bool pub_odom_;
 
     // Lidar counter and maximum distance value
     uint32_t laser_count_;
@@ -97,9 +103,6 @@ namespace ramon_slam2d
     int maps_number_;
     int current_map_;
     // double map (not an occupancygrid one)
-    Eigen::MatrixXd map_eig_high_;
-    Eigen::MatrixXd map_eig_med_;
-    Eigen::MatrixXd map_eig_low_;
     std::vector<Eigen::MatrixXd> map_eig_vec_;
 
     // Points that conforms a map
@@ -115,11 +118,13 @@ namespace ramon_slam2d
 
     // ROS Publishers
     ros::Publisher map_pub_;
-    ros::Publisher map_meta_pub_;
+    ros::Publisher odom_pub_;
+    ros::Publisher real_odom_pub_;
 
     // ROS Subscribers
     ros::Subscriber laser_sub_;
     ros::Subscriber imu_sub_;
+    ros::Subscriber ground_truth_sub_;
 
     // Threads
     boost::thread* transform_thread_;
@@ -132,7 +137,7 @@ namespace ramon_slam2d
     double point_dis_threshold_;
     uint32_t min_adjacent_points_;
 
-    // Width (m_), height(n_) and resolution (res_)
+    // Width (m_), height(n_), resolution of each map (res_vec_) and its relative value (res_multiplier_)
     uint32_t m_, n_;
     
     Eigen::VectorXd res_vec_;
@@ -150,7 +155,14 @@ namespace ramon_slam2d
     // Broadcaster transform
     tf::TransformBroadcaster tf_broadcaster_;
 
+    bool publish_map_to_laser_;
     tf::Transform map_to_laser_;
+
+    // Check if start() was called
+    bool started_;
+
+    // Ground truth
+    bool publish_ground_truth_;
 
     /* Private functions */
 
@@ -161,6 +173,8 @@ namespace ramon_slam2d
 
     void getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan_points, Eigen::Matrix2Xd &scan_out);
 
+    void groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_truth);
+
     void init(double res);
 
     void laserCallback(const sensor_msgs::LaserScan::ConstPtr& scan);
@@ -169,6 +183,7 @@ namespace ramon_slam2d
     
     void mapsUpdate(Eigen::Matrix2Xd scan_points);
 
+    void publishOdometry(void);
     void publishTransform(void);
   };
 };

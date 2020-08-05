@@ -6,7 +6,8 @@
       <!-- <arg name="BagFile"           default="$(find ramon_slam2d)/bagfiles/depto_piezafondo/_2019-10-15-15-19-10_pieza_fondo_1hz.bag"/> -->
       <!-- <arg name="BagFile"           default="floors/floor1.bag"/> -->
       <!-- <arg name="BagFile"           default="$(find ramon_slam2d)/bagfiles/cartographer_records/test5.bag"/> -->
-      <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot_sim/2020-07-29-12-52-56.bag"/>
+      <!-- <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot_sim/turtlebot_playground/2020-07-29-12-52-56.bag"/> -->
+      <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot/maze/2020-08-04-11-21-37.bag"/>
 
       <arg name="isSweep"	      default="false"/>
 	<arg name="isRecord"	      default="false"/>
@@ -18,6 +19,7 @@
 	<!-- <arg name="BagRate"	      default="0.01"/> -->
 	<arg name="BagRate"	      default="0.1"/>
 	<arg name="StdDev"	      default="0.01"/>
+	<!-- <arg name="StdDev"	      default="0.05"/> -->
 
     <node if="$(arg isRecord)" pkg="rosbag" type="record" name="rosbag_record_robot"
        args="record -o $(find ramon_slam2d)/bagfiles/
@@ -36,6 +38,7 @@
   	        <param name="rotation_speed"	  type="int" value="1"/>
     </node>
 
+  <param name="robot_description" command="$(find xacro)/xacro '$(find ramon_simulation)/urdf/rosbot/rosbot.xacro'"/>
 
     <!-- run pointcloud_to_laserscan node -->
     <node if="$(arg isPCtoLS)" pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
@@ -66,26 +69,27 @@
         </rosparam>
 
     </node>
- 
-  <node if="$(arg isRVizPC)" pkg="tf"
-        type="static_transform_publisher"
-        name="lidar_base_broadcaster"
-        args="0 0 0 0 0 0 map laser_frame 100" />
 
-  <node if="$(arg isRVizOG)" pkg="tf"
+<!-- TFs -->
+  <node pkg="tf"
         type="static_transform_publisher"
-        name="lidar_base_broadcaster"
-        args="0 0 0 0 0 0 map laser_frame 100" />
-<!-- 
+        name="odom_broadcaster"
+        args="0 0.08 0 0 0 -0.7071068 0.7071068 map odom 100" />
+
+  <node pkg="tf"
+        type="static_transform_publisher"
+        name="robot_odom_broadcaster"
+        args="0 0 0 0 0 0 1 world robot_odom 100" />        
+
   <node if="$(arg isTransform)" pkg="tf"
         type="static_transform_publisher"
-        name="lidar_broadcaster"
-        args="0 0 0 0 0 0 map scan_3d 100" />
- -->
-  <node if="$(arg isTransform)" pkg="tf"
+        name="world_broadcaster"
+        args="0 0 0 0 0 0 1 world map 100" />
+
+  <node pkg="tf"
         type="static_transform_publisher"
-        name="pose_broadcaster"
-        args="0 0 0 0 0 0 map pose 100" />
+        name="real_odom_broadcaster"
+        args="-0.005 0.025 0 0 0 -0.7071068 0.7071068 world real_odom 100" />
 
   <!-- Delay -->
   <arg name="node_start_delay" default="2.0" />
@@ -99,6 +103,9 @@
       <!-- <param name="scan_topic_name" type="string" value="/f_scan"/> -->
       <!-- <param name="imu_topic_name" type="string" value="/imu_data"/> -->
       <!-- <param name="base_frame" type="string" value="/base_footprint"/> -->
+      <param name="imu_topic_name" type="string" value="/imu"/>
+      <param name="ground_truth_topic_name" value="/ground_truth/state"/>
+      <param name="map_count" value="4"/>
       <param name="std_dev" value="$(arg StdDev)"/>
   </node>
 

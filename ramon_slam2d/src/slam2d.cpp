@@ -63,12 +63,22 @@ SLAM2D::~SLAM2D()
 void SLAM2D::start()
 {
   map_pub_ = nh_.advertise<nav_msgs::OccupancyGrid>("map", 1);
-  map_meta_pub_ = nh_.advertise<nav_msgs::MapMetaData>("map_metadata", 1);
   laser_sub_ = nh_.subscribe(scan_topic_name_, 1, &SLAM2D::laserCallback, this);  // check the last param
   if(use_imu_)
     imu_sub_ = nh_.subscribe(imu_topic_name_, 1, &SLAM2D::inertialCallback, this);
+  
   // TF thread
-  transform_thread_ = new boost::thread(boost::bind(&SLAM2D::publishTransform, this));
+  if(publish_map_to_laser_)
+    transform_thread_ = new boost::thread(boost::bind(&SLAM2D::publishTransform, this));
+
+  odom_pub_ = nh_.advertise<nav_msgs::Path>("robot_odom", 1);
+  
+  if(publish_ground_truth_)
+  {
+    ground_truth_sub_ = nh_.subscribe(ground_truth_topic_name_, 1, &SLAM2D::groundTruthCallback, this);
+    real_odom_pub_ = nh_.advertise<nav_msgs::Path>("real_odom",1);
+  }
+  started_ = true;
 }
 
 /* Private functions */
@@ -82,39 +92,33 @@ void SLAM2D::start()
  */
 int SLAM2D::getMaximumLikelihoodTransform(int theta_index, rigid_t& rigid)
 {
-  double delta_x;
-  double delta_y;
-  double delta_theta;
+  // Define the steps of each parameter iteration
+  double delta_x = rigid.res / 4;
+  double delta_y = rigid.res / 4;
+  double delta_theta = 0.5 * rigid.theta_factor * M_PI / 360;
   double sum;
   int index_x, index_y;
-  Eigen::Matrix2Xd scan_aux;
-  double aux;
+  Eigen::Matrix2Xd scan_aux, scan_aux2;
+  double aux = theta_index * delta_theta + rigid.theta;
   Eigen::Rotation2Dd rot2(aux);
 
   scan_aux.resize(2, rigid.scan_in.cols());
 
-  // Define the steps of each parameter iteration
-  delta_x = rigid.res / 4;
-  delta_y = rigid.res / 4;
-  delta_theta = rigid.theta_factor * M_PI / 360;
-
   // Compute the rotation first
-  aux = theta_index * delta_theta + rigid.theta;
-
   if(aux != 0)
-    scan_aux = rot2.toRotationMatrix() * rigid.scan_in;
+    scan_aux2 = rot2.toRotationMatrix() * rigid.scan_in;
   else
-    scan_aux = rigid.scan_in;
+    scan_aux2 = rigid.scan_in;
     
   // Then iterate over the traslations
   for (int x_index = -x_iteration_; x_index <= x_iteration_; x_index++)
   {
     // Compute x traslaton
-    scan_aux.row(0) = rigid.scan_in.row(0) + Eigen::MatrixXd::Constant(1, rigid.scan_in.cols(), x_index);
+    scan_aux.row(0) = scan_aux2.row(0) + Eigen::MatrixXd::Constant(1, scan_aux2.cols(), rigid.x + delta_x * x_index);
     for (int y_index = -y_iteration_; y_index <= y_iteration_; y_index++)
     {
       // Compute y traslation
-      scan_aux.row(1) = rigid.scan_in.row(1) + Eigen::MatrixXd::Constant(1, rigid.scan_in.cols(), y_index);
+      scan_aux.row(1) = scan_aux2.row(1) + Eigen::MatrixXd::Constant(1, scan_aux2.cols(), rigid.y + delta_y * y_index);
 
       // Get values of points in map
       sum = 0.0;
@@ -236,11 +240,7 @@ int SLAM2D::getPointsFromScan(sensor_msgs::LaserScan scan, Eigen::Matrix2Xd &poi
  */
 void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan_in, Eigen::Matrix2Xd &scan_out)
 {
-  double x_out, y_out, theta_out;
-  double sum_out;
-  int i;
   rigid_t rigid;
-  Eigen::Rotation2Dd rot2(laser_imu_theta_);
 
   std::vector<boost::thread*> rigid_body_threads;
 
@@ -260,15 +260,15 @@ void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan
     rigid.theta_factor = res_vec_(map_index) / res_vec_(0);
     rigid.res = res_vec_(map_index);
     rigid.map = map_eig_vec_[map_index];
-    for (i = -theta_iteration_; i <= theta_iteration_; i++)
+    for (int theta_index = -theta_iteration_; theta_index <= theta_iteration_; theta_index++)
     {
       // Get the best rigid body transform, as the index being part of delta x
       rigid_body_threads.push_back(
-          new boost::thread(&SLAM2D::getMaximumLikelihoodTransform, this, i, boost::ref(rigid)));
+          new boost::thread(&SLAM2D::getMaximumLikelihoodTransform, this, theta_index, boost::ref(rigid)));
     }
 
     // delete created threads
-    for (i = 0; i < rigid_body_threads.size(); i++)
+    for (int i = 0; i < rigid_body_threads.size(); i++)
     {
       rigid_body_threads[i]->join();
       delete rigid_body_threads[i];
@@ -294,6 +294,32 @@ void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan
 }
 
 /**
+ * @brief Callback function of the ground truth topic, to publish the real odometry as a path
+ *
+ * @param scanptr Pointer to ground truth data
+ */
+void SLAM2D::groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_truth)
+{
+  static nav_msgs::Path real_odom;
+  nav_msgs::Odometry gt = *ground_truth;
+  geometry_msgs::PoseStamped real_pose;
+  real_pose.header.stamp = ros::Time::now();
+  real_odom.header.stamp = real_pose.header.stamp;
+  real_pose.header.frame_id = "real_odom";
+  real_odom.header.frame_id = "real_odom";
+  
+  if(started_)
+  {
+    real_pose.pose.position.x = gt.pose.pose.position.x;
+    real_pose.pose.position.y = gt.pose.pose.position.y;
+    real_pose.pose.position.z = 0;
+    real_pose.pose.orientation = gt.pose.pose.orientation;
+    real_odom.poses.push_back(real_pose);
+    real_odom_pub_.publish(real_odom);
+  }
+}
+
+/**
  * @brief Callback function of the imu topic
  *
  * @param scanptr Pointer to imu data
@@ -316,13 +342,15 @@ void SLAM2D::init(double res)
 {
   double std_dev;
 
+  started_ = false;
+
   laser_count_ = 0;
   transform_publish_period_ = 0.05;
 
   point_free_ = 0.3;
   point_noinfo_ = 0.5;
   point_occupied_ = 0.7;
-  point_dis_threshold_ = 0.1;
+  point_dis_threshold_ = 2 * res; //0.1 antes
   min_adjacent_points_ = 5;
 
   x_iteration_ = 5;
@@ -344,10 +372,18 @@ void SLAM2D::init(double res)
     use_imu_ = false;
   else
     use_imu_ = true;
+  if (!nh_.getParam("ground_truth_topic_name", ground_truth_topic_name_))
+    publish_ground_truth_ = false;
+  else
+    publish_ground_truth_ = true;
   if (!nh_.getParam("map_count", map_count_))
     map_count_ = 3;
   if (!nh_.getParam("std_dev", std_dev))
     std_dev = 0.1;
+  if (!nh_.getParam("publish_map_to_laser", publish_map_to_laser_))
+    publish_map_to_laser_ = false;
+  else
+    publish_map_to_laser_ = true;
 
   ROS_INFO("Params:");
   std::cout << "base_frame: " << base_frame_ << std::endl;
@@ -355,9 +391,21 @@ void SLAM2D::init(double res)
   std::cout << "imu_frame: " << imu_frame_ << std::endl;
   std::cout << "tf_delay: " << tf_delay_ << std::endl;
   std::cout << "scan_topic_name: " << scan_topic_name_ << std::endl;
-  std::cout << "use_imu: " << use_imu_ << std::endl;
   if(use_imu_)
+  { 
+    std::cout << "use_imu: true" << std::endl;
     std::cout << "imu_topic_name: " << imu_topic_name_ << std::endl;
+  }
+  else
+    std::cout << "use_imu: false" << std::endl;
+  if(publish_ground_truth_)
+  {
+    std::cout << "publish_ground_truth: true" << std::endl;
+    std::cout << "ground_truth_topic_name: " << ground_truth_topic_name_ << std::endl;
+  }
+  else
+    std::cout << "publish_ground_truth: false" << std::endl;
+
   std::cout << "map_count: " << map_count_ << std::endl;
   std::cout << "std_dev: " << std_dev << std::endl;
 
@@ -389,6 +437,8 @@ void SLAM2D::init(double res)
   occmap_.info.origin.position.y = -0.5 * n_;
   occmap_.info.origin.position.z = 0;
   
+  occmap_.header.frame_id = map_frame_;
+
   for (int i = 0; i < round((m_ * n_) / (res_vec_(res_vec_.size()-1) * res_vec_(res_vec_.size()-1))); i++)
     occmap_.data.push_back(-1);
 
@@ -403,17 +453,22 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 {
   static int first_time = 1;
   static ros::Time last = ros::Time::now();
+  static nav_msgs::Path odom;
+  
   ros::Time now = ros::Time::now();
+  geometry_msgs::PoseStamped pose;
   sensor_msgs::LaserScan scan = *scanptr;
 
   Eigen::Matrix2Xd scan_points, scan_transformed;
 
+  // Rotation matrix used only the first time the laser scan data is stored
+  Eigen::Rotation2Dd rot2(imu_theta_);
+
   // Para calcular tiempos del algoritmo
   ros::WallTime start, end;
 
-  Eigen::Rotation2Dd rot2(imu_theta_);
-
-  laser_imu_theta_ = imu_theta_;
+  pose.header.frame_id = "robot_odom";
+  odom.header.frame_id = "robot_odom";
 
   if (first_time)
   {
@@ -425,6 +480,7 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   if(use_imu_ && !got_imu_data_)
     return;
 
+  laser_imu_theta_ = imu_theta_;
   got_imu_data_ = false;
   
   start = ros::WallTime::now();
@@ -437,7 +493,7 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   // If laser count == 1, store data, otherwise get the rigid body transform
   if (laser_count_ > 1)
   {
-    // if(now.sec - last.sec < 1)
+    // if(((now - last).toNSec() * 1e-6) < 1)
     // {
     //   return;      
     // }
@@ -462,6 +518,16 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   double execution_time = (end - start).toNSec() * 1e-6;
   ROS_INFO_STREAM_COND(debug_ < 0, "Exectution time (ms): " << execution_time);
   map_pub_.publish(occmap_);
+
+
+  odom.header.stamp = now;
+  pose.header.stamp = now;
+  pose.pose.position.x = x_;
+  pose.pose.position.y = y_;
+  pose.pose.position.z = 0;
+  pose.pose.orientation = tf::createQuaternionMsgFromYaw(theta_);
+  odom.poses.push_back(pose);
+  odom_pub_.publish(odom);
 }
 
 /**
@@ -507,8 +573,8 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
     m = Eigen::MatrixXd::Constant(uint32_t(round(2 * map_size(0) / res_vec_(map_index))), uint32_t(round(2 * map_size(1) / res_vec_(map_index))),
                                   point_noinfo_);
 
-    // Update high resolution map
-    for (int i = 0; i < scan_points.cols()-1; i++)
+    // Update current map
+    for (int i = 0; i < scan_points.cols(); i++)
     {
       // Get the free points between the vehicle and each laser point
       int ret_bres = this->bresenhamLineAlgorithm(x_ / res_vec_(map_index), 
@@ -527,11 +593,11 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
           index_point(0) = uint32_t(round(round(map_size(0) / res_vec_(map_index)) + points_free[index].x));
           index_point(1) = uint32_t(round(round(map_size(1) / res_vec_(map_index)) + points_free[index].y));
 
-          // gauss = (abs((1/(2*M_PI*std_dev_(0)) * exp(-pow(points_free[index].x - points_free[points_free.size()-1].x,2) / (2*std_dev_(0)*std_dev_(0)))) *
-          //                  (1/(2*M_PI*std_dev_(1)) * exp(-pow(points_free[index].y - points_free[points_free.size()-1].y,2) / (2*std_dev_(1)*std_dev_(1))))
-          //                 ));
-          gauss = abs(this->gaussianBlur1D(points_free[index].x, points_free[points_free.size()-1].x, std_dev_(0)) *
-                      this->gaussianBlur1D(points_free[index].y, points_free[points_free.size()-1].y, std_dev_(1)));
+          if(index == points_free.size()-2)
+            gauss = point_occupied_;
+          else
+            gauss = abs(this->gaussianBlur1D(points_free[index].x, points_free[points_free.size()-1].x, std_dev_(0)) *
+                        this->gaussianBlur1D(points_free[index].y, points_free[points_free.size()-1].y, std_dev_(1)));
 
           m(index_point(0), index_point(1)) =
               // this->getProbaFromLogit(this->getLogitFromProba(point_free_) +
@@ -544,7 +610,8 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
       index_point(1) = uint32_t(round(round(map_size(1) / res_vec_(map_index)) + scan_points(1, i) / res_vec_(map_index)));
 
       // Update occupied points in map
-      
+      /// \fixme check if this is necessary
+      /*
       if(map_index == res_vec_.size())
       {
         // Update around point option (3x3 matrix)
@@ -559,10 +626,12 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
             this->getProbaFromLogit(this->getLogitFromProba(point_occupied_) +
                                     this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
       }
+      */
       // Clear free points vector
       points_free.clear();
     }
 
+    // Get center of map
     map_delta(0) = int(round(0.5 * (m_ / res_vec_(map_index) - m.rows())));
     map_delta(1) = int(round(0.5 * (n_ / res_vec_(map_index) - m.cols())));
 
@@ -575,9 +644,8 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
             this->getLogitFromProba(m(x, y)) +
             this->getLogitFromProba(map_eig_vec_[map_index](x + map_delta(0), y + map_delta(1))) - this->getLogitFromProba(point_noinfo_));
 
-        // if(map_index == res_vec_.size()-1)
-        if(map_index == res_vec_.size()-1 || map_index == 0)
-        // if(map_index == 0)
+        // Finally, update the showed map in rviz (usually the high resolution map)
+        if(map_index == res_vec_.size()-1)
         {
           occmap_.data[MAP_IDX(occmap_.info.width, x + map_delta(0), y + map_delta(1))] =
               int8_t(map_eig_vec_[map_index](x + map_delta(0), y + map_delta(1)) * 100);
@@ -588,6 +656,15 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
 }
 
 /**
+ * @brief Publishes the odometry of the vehicle
+ *
+ */
+void SLAM2D::publishOdometry(void)
+{
+
+}
+
+/**
  * @brief Publishes the transformed point of the vehicle
  *
  */
@@ -595,14 +672,14 @@ void SLAM2D::publishTransform(void)
 {
   if (transform_publish_period_ == 0)
     return;
-
   ros::Time tf_expiration;
   ros::Rate r(1.0 / transform_publish_period_);
   while (ros::ok())
   {
-    map_to_laser_ = tf::Transform(tf::createQuaternionFromRPY(0, 0, theta_), tf::Vector3(x_, y_, 0.0));
+    map_to_laser_ = tf::Transform(tf::createQuaternionFromYaw(theta_), tf::Vector3(x_, y_, 0.0));
     tf_expiration = ros::Time::now() + ros::Duration(tf_delay_);
     tf_broadcaster_.sendTransform(tf::StampedTransform(map_to_laser_, tf_expiration, map_frame_, base_frame_));
+    
     r.sleep();
   }
 }

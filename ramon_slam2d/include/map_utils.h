@@ -26,7 +26,7 @@
     ~MapUtils();
 
     int bresenhamLineAlgorithm(double x0, double y0, double x1, double y1, std::vector<geometry_msgs::Point32>& point);
-    double gaussianBlur1D(double a, double b, double std_dev);
+    double gaussianBlur1D(double x0, double x1, double std_dev);
     double gaussianBlurIntegral(double a, double b, double c, double std);
       
     void getOccupancyLikelihood(Eigen::Matrix3d& likelihood, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res);

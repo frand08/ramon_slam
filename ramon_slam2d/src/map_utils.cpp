@@ -77,17 +77,16 @@ int MapUtils::bresenhamLineAlgorithm(double x0, double y0, double x1, double y1,
 /**
  * @brief Obtains the Gaussian Blur Integral
  *
- * @param a
- * @param b
- * @param c
- * @param std
+ * @param x0
+ * @param x1
+ * @param std_dev
  * @return double
  */
 double MapUtils::gaussianBlur1D(double x0, double x1, double std_dev)
 {
   // Qian2019 - P.7
   // erf: error function
-  return (1/(2*M_PI*std_dev) * exp(-pow(x0 - x1,2) / (2*std_dev*std_dev)));
+  return (1 / (2 * M_PI * std_dev) * exp(-pow(x0 - x1,2) / (2 * std_dev * std_dev)));
 }
 
 /**
@@ -250,8 +249,10 @@ void MapUtils::logitUpdate(Eigen::Ref<Eigen::MatrixXd> m, Eigen::Vector2i index,
       if (m.rows() >= (index(0) + x) && m.cols() >= (index(1) + y) && (index(0) + x - 1) > 0 && (index(1) + y - 1) > 0)
       {
         m(index(0) + x - 1, index(1) + y - 1) =
-            this->getProbaFromLogit(this->getLogitFromProba(likelihood(x, y)) +
-                                    this->getLogitFromProba(m(index(0) + x - 1, index(1) + y - 1)) - logit_t0);
+               1 - (1 - m(index(0) + x - 1, index(1) + y - 1)) * likelihood(x, y);
+        // m(index(0) + x - 1, index(1) + y - 1) =
+        //     this->getProbaFromLogit(this->getLogitFromProba(likelihood(x, y)) +
+        //                             this->getLogitFromProba(m(index(0) + x - 1, index(1) + y - 1)) - logit_t0);
       }
     }
   }
@@ -314,34 +315,21 @@ void MapUtils::getOccupancyLikelihood(Eigen::Matrix3d& likelihood, Eigen::Vector
   likelihood(2, 1) = point_occupied_ * (1 - abs(Px2x3 * Py1y2));  // 7
   likelihood(2, 2) = point_occupied_ * (1 - abs(Px3x4 * Py1y2));  // 8
 
-  likelihood(0, 0) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(res,2) / (2*std_dev(0)*std_dev(0)))) *
-                     (1/(2*M_PI*std_dev(1)) * exp(-pow(res,2) / (2*std_dev(1)*std_dev(1))))
-                     ));
-  likelihood(0,2) = likelihood(0,0);
-  likelihood(2,0) = likelihood(0,0);
-  likelihood(2,2) = likelihood(0,0);
-  likelihood(1,0) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(0,2) / (2*std_dev(0)*std_dev(0)))) *
-                     (1/(2*M_PI*std_dev(1)) * exp(-pow(res,2) / (2*std_dev(1)*std_dev(1))))
-                     ));
-  likelihood(1,2) = likelihood(1,0);
-  likelihood(0,1) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(res,2) / (2*std_dev(0)*std_dev(0)))) *
-                     (1/(2*M_PI*std_dev(1)) * exp(-pow(0,2) / (2*std_dev(1)*std_dev(1))))
-                     ));
-  likelihood(2,1) = likelihood(0,1);
-  likelihood(1,1) = point_occupied_;
-
-
-  likelihood(0,0) = point_occupied_ * 0.8;
-  likelihood(0,1) = likelihood(0,0);
-  likelihood(0,2) = likelihood(0,0);
-  likelihood(1,0) = likelihood(0,0);
-  likelihood(1,1) = point_occupied_;
-  likelihood(1,2) = likelihood(0,0);
-  likelihood(2,0) = likelihood(0,0);
-  likelihood(2,1) = likelihood(0,0);
-  likelihood(2,2) = likelihood(0,0);
-  
-
+  // likelihood(0, 0) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(res,2) / (2*std_dev(0)*std_dev(0)))) *
+  //                    (1/(2*M_PI*std_dev(1)) * exp(-pow(res,2) / (2*std_dev(1)*std_dev(1))))
+  //                    ));
+  // likelihood(0,2) = likelihood(0,0);
+  // likelihood(2,0) = likelihood(0,0);
+  // likelihood(2,2) = likelihood(0,0);
+  // likelihood(1,0) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(0,2) / (2*std_dev(0)*std_dev(0)))) *
+  //                    (1/(2*M_PI*std_dev(1)) * exp(-pow(res,2) / (2*std_dev(1)*std_dev(1))))
+  //                    ));
+  // likelihood(1,2) = likelihood(1,0);
+  // likelihood(0,1) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(res,2) / (2*std_dev(0)*std_dev(0)))) *
+  //                    (1/(2*M_PI*std_dev(1)) * exp(-pow(0,2) / (2*std_dev(1)*std_dev(1))))
+  //                    ));
+  // likelihood(2,1) = likelihood(0,1);
+  // likelihood(1,1) = point_occupied_;
 }
 
 

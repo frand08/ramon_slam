@@ -19,10 +19,10 @@
 #include <unsupported/Eigen/NonLinearOptimization>
 #include <unsupported/Eigen/KroneckerProduct>
 
-#define PY_SSIZE_T_CLEAN
+// #define PY_SSIZE_T_CLEAN
 // #include <Python.h>
-#include <pybind11_catkin/pybind11/pybind11.h>
-#include <pybind11_catkin/pybind11/numpy.h>
+// #include <pybind11_catkin/pybind11/pybind11.h>
+// #include <pybind11_catkin/pybind11/numpy.h>
 
 struct mag_cal_functor
 {

@@ -26,7 +26,6 @@
 #include "gyro_calibration.h"
 #include "accel_calibration.h"
 #include "mag_calibration.h"
-#include "static_detector.h"
 
 #include "matplotlibcpp.h"
 namespace plt = matplotlibcpp;

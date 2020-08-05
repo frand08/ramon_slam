@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_gazebo.launch"></include>
+
+  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_world.launch"></include>
+
+  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_teleop.launch"></include>
+
+</launch>

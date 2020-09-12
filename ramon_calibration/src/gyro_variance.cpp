@@ -1,7 +1,7 @@
 #include <iostream>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
-#include <ramon_calibration/ImuWithMag.h>
+#include <ramon_msgs/ImuWithMag.h>
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 
@@ -59,7 +59,7 @@ int main (int argc, char** argv)
     {
         /* TODO: poner condicional para ver de que tipo de msg se trata */
         // sensor_msgs::Imu::ConstPtr i = mm.instantiate<sensor_msgs::Imu>();
-        ramon_calibration::ImuWithMag::ConstPtr i = mm.instantiate<ramon_calibration::ImuWithMag>();
+        ramon_msgs::ImuWithMag::ConstPtr i = mm.instantiate<ramon_msgs::ImuWithMag>();
         if (i != NULL)
         {
             gyro_values(j,0) = i->angular_velocity.x;

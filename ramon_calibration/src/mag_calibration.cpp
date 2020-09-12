@@ -107,9 +107,11 @@ int mag_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, E
     Ds_0 = aux.llt().matrixL();     // get lower matrix from cholesky decomposition
     
     oh_0 = -0.5 * A.inverse() * b;
+
+     return 0;
 }
 
 int mag_calibration_init(Eigen::MatrixXf mag_values, Eigen::VectorXf &output_values)
 {
-
+     return 0;
 }

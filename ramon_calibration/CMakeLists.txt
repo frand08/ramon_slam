@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   rosbag
   sensor_msgs
   message_generation
+  ramon_msgs
 )
 
 ## System dependencies are found with CMake's conventions

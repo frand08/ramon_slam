@@ -16,7 +16,7 @@
 #include <fstream>
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
-#include <ramon_calibration/ImuWithMag.h>
+#include <ramon_msgs/ImuWithMag.h>
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 

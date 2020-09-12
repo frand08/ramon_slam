@@ -438,7 +438,7 @@ int IMUCalibration::readBag(void)
     foreach(rosbag::MessageInstance const mm, view)
     {
         // Possible message types
-        ramon_calibration::ImuWithMag::ConstPtr imumag = mm.instantiate<ramon_calibration::ImuWithMag>();
+        ramon_msgs::ImuWithMag::ConstPtr imumag = mm.instantiate<ramon_msgs::ImuWithMag>();
         sensor_msgs::Imu::ConstPtr imu = mm.instantiate<sensor_msgs::Imu>();
 
         accel_values_.resize(bag.getSize(),3);

@@ -1,0 +1,126 @@
+<launch>
+
+  <!-- bagfile params -->
+  <!-- <arg name="bag_file"        default="$(find ramon_simulation)/bagfiles/rosbot/turtlebot3_house/2020-08-05-22-15-47.bag"/> -->
+  <!-- <arg name="bag_file"        default="$(find ramon_simulation)/bagfiles/rosbot/turtlebot3_world/2020-08-07-12-05-25.bag"/> -->
+  <arg name="bag_file"        default="$(find ramon_simulation)/bagfiles/rosbot/turtlebot3_world/2020-08-16-12-15-37.bag"/>
+  <!-- <arg name="bag_file"        default="$(find ramon_simulation)/bagfiles/rosbot/turtlebot3_world/2020-08-17-12-06-04.bag"/> -->
+  <!-- <arg name="bag_file"        default="$(find ramon_simulation)/bagfiles/rosbot/image_recognition/2020-08-22-15-07-00.bag"/> -->
+
+  <arg name="bag_play"	      default="true"/>
+	<arg name="bag_rate"	      default="0.1"/>
+	<!-- <arg name="bag_rate"	      default="1.0"/> -->
+
+  <!-- 3D params -->
+  <arg name="use_octomap"     default="false"/>
+  <arg name="use_ramon3d"     default="true"/>
+  <!-- RViz params -->
+  <arg name="use_rviz"	      default="false"/>
+
+  <!-- OpenNI params -->
+  <arg name="use_openni"	    default="false"/>
+  
+  <!-- bagfile -->
+  <param if="$(arg bag_play)" name="/use_sim_time" value="true"/>
+
+  <!-- openni2 launch include -->
+  <!-- Interesting info: http://wiki.ros.org/openni_launch/Tutorials/BagRecordingPlayback -->
+  <!-- Useful info: https://answers.ros.org/question/156541/openni2-color-point-cloud/ -->
+  <include if="$(arg use_openni)" file="$(find openni2_launch)/launch/openni2.launch">
+    <!-- <arg name="depth_registration" value="true" /> -->
+    <arg name="depth_registration" value="false" />
+    <arg name="rgb_processing" value="true" />
+    <arg name="depth_processing" value="true" />
+    <arg name="depth_registered_processing" value="true" />
+    <arg name="load_driver" value="false" />
+    <arg name="publish_tf" value="false" />  
+    <arg name="device_id" value="invalid" />
+  </include>
+
+  <node if="$(arg bag_play)" 
+        pkg="rosbag" 
+        type="play" 
+        name="rosbag_play_robot"
+        args="--clock --rate=$(arg bag_rate) $(arg bag_file)" >
+  </node>
+
+  <!-- TFs -->
+  <node pkg="tf"
+        type="static_transform_publisher"
+        name="odom_broadcaster"
+        args="0 0.08 0 0 0 -0.7071068 0.7071068 map odom 100" >
+  </node>
+
+  <node pkg="tf"
+        type="static_transform_publisher"
+        name="robot_odom_broadcaster"
+        args="0 0 0 0 0 0 1 world robot_odom 100" >
+  </node>        
+
+  <node pkg="tf"
+        type="static_transform_publisher"
+        name="world_broadcaster"
+        args="0 0 0 0 0 0 1 world map 100" >
+  </node>
+
+  <!-- <node pkg="tf"
+        type="static_transform_publisher"
+        name="cloud_base_broadcaster"
+        args="0 0 0 0 0 0 1 world cloud_base 100" >
+  </node> -->
+
+  <node pkg="tf"
+        type="static_transform_publisher"
+        name="real_odom_broadcaster"
+        args="0 0 0 0 0 0 1 world real_odom 100" >
+  </node>
+
+  <node if="$(arg use_ramon3d)"
+        name="ramon_slam3d"	
+        pkg="ramon_slam3d"  
+        type="slam3d" 
+        output="screen"
+        clear_params="true">
+    <!-- <param name="depth_points_topic" value="/camera/depth/points"/> -->
+    <param name="depth_points_topic" value="/camera/depth_registered/points"/>
+    <!-- <param name="imu_topic" type="string" value="/imu"/> -->
+    <!-- <param name="ground_truth_topic" value="/ground_truth/state"/> -->
+    <param name="use_octomap" value="$(arg use_octomap)"/>
+  </node>
+
+  <!-- Robot -->
+  <param name="robot_description" command="$(find xacro)/xacro '$(find ramon_simulation)/urdf/rosbot/rosbot.xacro'"/>
+
+  <node  if="$(arg use_octomap)" pkg="octomap_server" type="octomap_server_node" name="octomap_server">
+    <param name="resolution" value="0.05" />
+    
+    <!-- fixed map frame (set to 'map' if SLAM or localization running!) -->
+    <param name="frame_id" type="string" value="map" />
+    
+    <!-- maximum range to integrate (speedup!) -->
+    <param name="sensor_model/max_range" value="5.0" />
+    
+    <!-- data source to integrate (PointCloud2) -->
+    <!-- <remap from="cloud_in" to="/camera/depth_registered/points" /> -->
+    <!-- <remap from="cloud_in" to="/cloud_base" /> -->
+    <remap from="cloud_in" to="/ramon_slam3d/map" />
+  </node>
+
+  <!-- RViz -->
+  <group if="$(arg use_rviz)">
+    <node unless="$(arg use_octomap)"
+          name="rviz_OG" 
+          pkg="rviz" 
+          type="rviz" 
+          args="-d $(find ramon_slam3d)/rviz/camera_map_pointcloud.rviz" >
+    </node>
+
+    <node if="$(eval use_octomap)" 
+          name="rviz_OM" 
+          pkg="rviz" 
+          type="rviz" 
+          args="-d $(find ramon_slam3d)/rviz/camera_map_octomap.rviz" >
+    </node>
+  </group>
+
+</launch>

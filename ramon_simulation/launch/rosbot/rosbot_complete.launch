@@ -1,10 +1,52 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
 
-  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_gazebo.launch"></include>
+  <!-- Set robot model -->
+  <arg name="robot_model" default="rosbot"/>
 
-  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_world.launch"></include>
+  <arg name="robot_pos_x" default="-1.9"/>
+  <arg name="robot_pos_y" default="0.0"/>
+  <arg name="robot_pos_z" default="0.0"/>
 
-  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_teleop.launch"></include>
+  <arg name="robot_pos_R" default="0.0"/>
+  <arg name="robot_pos_P" default="0.0"/>
+  <arg name="robot_pos_Y" default="0.0"/>
 
+  <arg name="use_openni2" default="true"/>
+
+  <!-- Set world -->
+  <!-- <arg name="world" default="$(find ramon_simulation)/worlds/turtlebot3/turtlebot3_world.world"/> -->
+  <!-- <arg name="world" default="$(find ramon_simulation)/worlds/rosbot/image_recognition.world"/> -->
+  <!-- <arg name="world" default="$(find ramon_simulation)/worlds/ramon/house3.world"/> -->
+  <arg name="world" default="$(find ramon_simulation)/worlds/rosbot/maze.world"/>
+
+
+  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_gazebo.launch">
+    <arg name="robot_model"      value="$(arg robot_model)"/>
+    <arg name="robot_pos_x"      value="$(arg robot_pos_x)"/>
+    <arg name="robot_pos_y"      value="$(arg robot_pos_y)"/>
+    <arg name="robot_pos_z"      value="$(arg robot_pos_z)"/>
+    <arg name="robot_pos_R"      value="$(arg robot_pos_R)"/>
+    <arg name="robot_pos_P"      value="$(arg robot_pos_P)"/>
+    <arg name="robot_pos_Y"      value="$(arg robot_pos_Y)"/>
+  </include>
+
+  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_world.launch">
+    <arg name="world"      value="$(arg world)"/>
+  </include>
+
+  <include file="$(find ramon_simulation)/launch/rosbot/rosbot_teleop.launch">
+  </include>
+
+  <!-- Useful info https://answers.ros.org/question/156541/openni2-color-point-cloud/ -->
+  <include if="$(arg use_openni2)" file="$(find openni2_launch)/launch/openni2.launch">
+    <!-- <arg name="depth_registration" value="true" /> -->
+    <arg name="depth_registration" value="false" />
+    <arg name="rgb_processing" value="true" />
+    <arg name="depth_processing" value="true" />
+    <arg name="depth_registered_processing" value="true" />
+    <arg name="load_driver" value="false" />
+    <arg name="publish_tf" value="false" />  
+    <arg name="device_id" value="invalid" />
+  </include>
 </launch>

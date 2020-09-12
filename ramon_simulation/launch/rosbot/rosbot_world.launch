@@ -2,7 +2,9 @@
 <launch>
 
   <!-- <arg name="world" default="empty"/> -->
-  <arg name="world" default="$(find ramon_simulation)/worlds/rosbot/maze.world"/>
+  <!-- <arg name="world" default="$(find ramon_simulation)/worlds/turtlebot3/turtlebot3_world.world"/> -->
+  <arg name="world" default="$(find ramon_simulation)/worlds/rosbot/image_recognition.world"/>
+  <!-- <arg name="world" default="$(find ramon_simulation)/worlds/ramon/house3.world"/> -->
   <arg name="paused" default="false"/>
   <arg name="use_sim_time" default="true"/>
   <arg name="gui" default="true"/>

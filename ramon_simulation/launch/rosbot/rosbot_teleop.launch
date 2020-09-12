@@ -5,4 +5,3 @@
     <param name="scale_angular" value="1.5" type="double"/>
   </node>
 </launch>
-

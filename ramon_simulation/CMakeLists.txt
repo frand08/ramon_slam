@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   tf
+  gazebo_ros
 )
 
 # No se por que se caga con esto el make
@@ -21,10 +22,16 @@ catkin_package(
 #  LIBRARIES ramon_simulation
 #  CATKIN_DEPENDS roscpp std_msgs
 #  DEPENDS system_lib
+  DEPENDS gazebo
 )
 
 
 include_directories(
 include
   ${catkin_INCLUDE_DIRS}
+  ${GAZEBO_INCLUDE_DIRS}
+)
+
+install(DIRECTORY launch models rviz worlds 
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

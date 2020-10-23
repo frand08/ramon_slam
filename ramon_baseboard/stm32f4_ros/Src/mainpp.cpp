@@ -4,7 +4,7 @@
 #include <std_msgs/String.h>
 #include <sensor_msgs/NavSatFix.h>
 #include <sensor_msgs/Imu.h>
-#include <ramon_calibration/ImuWithMag.h>
+#include <ramon_msgs/ImuWithMag.h>
 #include <string>
 //#include <nmea_msgs/Sentence.h>
 #include <sstream>

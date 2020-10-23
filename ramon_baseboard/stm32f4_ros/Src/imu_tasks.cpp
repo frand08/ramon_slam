@@ -1,7 +1,7 @@
 #include <ros.h>
 #include "MPU9250.h"
 #include <sensor_msgs/Imu.h>
-#include <ramon_calibration/ImuWithMag.h>
+#include <ramon_msgs/ImuWithMag.h>
 #include "cmsis_os.h"
 #include "stm32f4xx_hal.h"
 #include "mainpp.h"

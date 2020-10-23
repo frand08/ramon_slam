@@ -8,30 +8,31 @@
       <!-- <arg name="BagFile"           default="$(find ramon_slam2d)/bagfiles/cartographer_records/test5.bag"/> -->
       <!-- <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot_sim/turtlebot_playground/2020-07-29-12-52-56.bag"/> -->
       <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot/maze/2020-08-04-11-21-37.bag"/>
+      <!-- <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot/turtlebot3_house/2020-08-05-22-15-47.bag"/> -->
+      <!-- <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot/turtlebot3_world/2020-08-07-12-05-25.bag"/> -->
 
-      <arg name="isSweep"	      default="false"/>
-	<arg name="isRecord"	      default="false"/>
-	<arg name="isPlayBack"	      default="true"/>    
-	<arg name="isPCtoLS"	      default="false"/>
-	<arg name="isRVizPC"	      default="false"/>
-	<arg name="isRVizOG"	      default="true"/>
-	<arg name="isTransform"	      default="true"/>
+      <arg name="use_sweep"   default="false"/>
+	<arg name="bag_record"	    default="false"/>
+	<arg name="bag_play"	      default="true"/>    
+	<arg name="pc_to_ls"	      default="false"/>
+	<arg name="use_rviz"	      default="true"/>
+	<arg name="use_tf"	        default="true"/>
 	<!-- <arg name="BagRate"	      default="0.01"/> -->
 	<arg name="BagRate"	      default="0.1"/>
 	<arg name="StdDev"	      default="0.01"/>
 	<!-- <arg name="StdDev"	      default="0.05"/> -->
 
-    <node if="$(arg isRecord)" pkg="rosbag" type="record" name="rosbag_record_robot"
+    <node if="$(arg bag_record)" pkg="rosbag" type="record" name="rosbag_record_robot"
        args="record -o $(find ramon_slam2d)/bagfiles/
             /scan"
     />
-    <param if="$(arg isPlayBack)" name="/use_sim_time" value="true"/>
+    <param if="$(arg bag_play)" name="/use_sim_time" value="true"/>
     
-    <node if="$(arg isPlayBack)" pkg="rosbag" type="play" name="rosbag_play_robot"
+    <node if="$(arg bag_play)" pkg="rosbag" type="play" name="rosbag_play_robot"
        args="--clock --rate=$(arg BagRate) $(arg BagFile)"
     />
     <!-- run sweep_node node -->
-    <node if="$(arg isSweep)" name="sweep_node" pkg="sweep_ros" type="sweep_node" output="screen">
+    <node if="$(arg use_sweep)" name="sweep_node" pkg="sweep_ros" type="sweep_node" output="screen">
             <param name="serial_port"         type="string" value="/dev/ttyUSB0"/>
             <param name="serial_baudrate"     type="int"    value="9600"/>
             <param name="frame_id"            type="string" value="laser_frame"/>
@@ -40,53 +41,56 @@
 
   <param name="robot_description" command="$(find xacro)/xacro '$(find ramon_simulation)/urdf/rosbot/rosbot.xacro'"/>
 
-    <!-- run pointcloud_to_laserscan node -->
-    <node if="$(arg isPCtoLS)" pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
+  <!-- run pointcloud_to_laserscan node -->
+  <node if="$(arg pc_to_ls)" pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
+    <remap from="cloud_in" to="pc2"/>
+    <rosparam>
+        target_frame: laser_frame <!-- Leave disabled to output scan in pointcloud frame-->
+        transform_tolerance: 0.001
+        min_height: -1.0
+        max_height: 1.0
 
-        <remap from="cloud_in" to="pc2"/>
-        <rosparam>
-            target_frame: laser_frame <!-- Leave disabled to output scan in pointcloud frame-->
-            transform_tolerance: 0.001
-            min_height: -1.0
-            max_height: 1.0
+        <!--angle_min: -M_PI -M_PI/2-->
+        <!--angle_max: M_PI   M_PI/2-->
+        angle_min: -3.14 <!-- -M_PI/2-->
+        angle_max: 3.14  <!-- M_PI/2-->
+        <!--Modificado ya que caso contrario gmapping crashea al ser muchos puntos recibidos-->
+        angle_increment: M_PI/180
+        scan_time: 0.1
+        range_min: 0.5
+        range_max: 30.0
+        use_inf: false
 
-            <!--angle_min: -M_PI -M_PI/2-->
-            <!--angle_max: M_PI   M_PI/2-->
-            angle_min: -3.14 <!-- -M_PI/2-->
-            angle_max: 3.14  <!-- M_PI/2-->
-            <!--Modificado ya que caso contrario gmapping crashea al ser muchos puntos recibidos-->
-            angle_increment: M_PI/180
-            scan_time: 0.1
-            range_min: 0.5
-            range_max: 30.0
-            use_inf: false
+          <!--# Concurrency level, affects number of pointclouds queued for processing and number of threads used
+        # 0 : Detect number of cores
+        # 1 : Single threaded
+        # 2->inf : Parallelism level-->
+        concurrency_level: 2
+    </rosparam>
 
-             <!--# Concurrency level, affects number of pointclouds queued for processing and number of threads used
-            # 0 : Detect number of cores
-            # 1 : Single threaded
-            # 2->inf : Parallelism level-->
-            concurrency_level: 2
-        </rosparam>
-
-    </node>
+  </node>
 
 <!-- TFs -->
-  <node pkg="tf"
+  <node if="$(arg use_tf)" 
+        pkg="tf"
         type="static_transform_publisher"
         name="odom_broadcaster"
         args="0 0.08 0 0 0 -0.7071068 0.7071068 map odom 100" />
 
-  <node pkg="tf"
+  <node if="$(arg use_tf)" 
+        pkg="tf"
         type="static_transform_publisher"
         name="robot_odom_broadcaster"
         args="0 0 0 0 0 0 1 world robot_odom 100" />        
 
-  <node if="$(arg isTransform)" pkg="tf"
+  <node if="$(arg use_tf)" 
+        pkg="tf"
         type="static_transform_publisher"
         name="world_broadcaster"
         args="0 0 0 0 0 0 1 world map 100" />
 
-  <node pkg="tf"
+  <node if="$(arg use_tf)" 
+        pkg="tf"
         type="static_transform_publisher"
         name="real_odom_broadcaster"
         args="-0.005 0.025 0 0 0 -0.7071068 0.7071068 world real_odom 100" />
@@ -94,8 +98,7 @@
   <!-- Delay -->
   <arg name="node_start_delay" default="2.0" />
 
-  <node if="$(arg isTransform)" 
-        name="ramon_slam2d"	
+  <node name="ramon_slam2d"	
         pkg="ramon_slam2d"  
         type="slam2d" 
         output="screen"
@@ -108,19 +111,11 @@
       <param name="map_count" value="4"/>
       <param name="std_dev" value="$(arg StdDev)"/>
   </node>
-
-	<!-- Visualisation RVIZ for PointCloud -->
-	<node if="$(arg isRVizPC)" 
-          name="rviz_pc" 
-          pkg="rviz" 
-          type="rviz" 
-          args="-d $(find ramon_slam2d)/rviz/lidar_map_pointcloud.rviz" />
-
-	<!-- Visualisation RVIZ for OccupancyGrid -->
-	<node if="$(arg isRVizOG)" 
-          name="rviz_OG" 
-          pkg="rviz" 
-          type="rviz" 
-          args="-d $(find ramon_slam2d)/rviz/lidar_map_occupancygrid.rviz" />
+!-- RVIZ visualisation -->
+<node if="$(arg use_rviz)" 
+        name="rviz_OG" 
+        pkg="rviz" 
+        type="rviz" 
+      args="-d $(find ramon_slam2d)/rviz/lidar_map_occupancygrid.rviz" />
 
 </launch>

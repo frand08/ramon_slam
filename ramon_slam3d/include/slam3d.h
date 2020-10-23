@@ -29,27 +29,18 @@
 #include <fstream>
 
 #include <pcl_ros/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/registration/icp.h>
-#include <pcl/filters/filter.h>
-#include <pcl/common/transforms.h>
-#include <pcl/filters/voxel_grid.h>
 
 #include <pcl/io/pcd_io.h>
-
-#include <octomap/octomap.h>
-#include <octomap/OcTree.h>
-
-// https://docs.ros.org/api/octomap_ros/html/conversions_8cpp.html
-#include <sensor_msgs/point_cloud2_iterator.h>
-#include <octomap_msgs/conversions.h>
-#include <octomap_ros/conversions.h>
-// #include <octomap_msgs/Octomap.h>
 
 #include "map3d_utils.h"
 
 #define DEBUG_MODE -5
+
+
+typedef pcl::PointXYZRGB PointSourceT;
+typedef pcl::PointCloud<PointSourceT> PointCloudSourceT;
+typedef pcl::PointXYZRGBNormal PointT;
+typedef pcl::PointCloud<PointT> PointCloudT;
 
 namespace ramon_slam3d
 {
@@ -58,12 +49,11 @@ namespace ramon_slam3d
 	* @brief Clase para representar celdas.
 	*/
 
-  class SLAM3D : public Map3DUtils
+  class SLAM3D : public Map3DUtils<PointSourceT, PointT>
   {
   public:
     /* Public functions */
     SLAM3D();
-    SLAM3D(float octree_res);
     ~SLAM3D();
 
     void start();
@@ -80,6 +70,7 @@ namespace ramon_slam3d
     std::string imu_frame_;
     std::string map_frame_;
     std::string pointcloud_frame_;
+    std::string pcd_save_location_;
 
     // Topic names
     std::string depth_points_topic_;
@@ -95,25 +86,16 @@ namespace ramon_slam3d
 
     int debug_;
   
-
+    // Save in pcd data or not
+    bool pcd_save_enabled_;
+  
     // Broadcaster transform
     tf::TransformBroadcaster tf_broadcaster_;
 
     tf::Transform map_to_pointcloud_;
 
     // PointCloud2 used
-    PointCloudT::Ptr cloud2_map_;
-
-    // Store previous cloud
-    PointCloudT::Ptr cloud_prev_filtered_;
-    PointCloudT::Ptr cloud_prev_keypoints_;
-    PointCloudNormalT::Ptr cloud_prev_normals_;
-    PointCloudFeatureT::Ptr cloud_prev_features_;
-
-    // Octomap
-    octomap::OcTree* octree_map_;
-    octomap::Pointcloud octomap_;
-    bool use_octomap_;
+    PointCloudSourceT::Ptr cloud2_map_;
 
     // ROS Publishers
     ros::Publisher camera_odom_pub_;
@@ -134,9 +116,10 @@ namespace ramon_slam3d
 
     // Transformation matrix (icp transform is float)
     Eigen::Matrix4f trans_;
+    Eigen::Matrix4d used_trans_;
     /* Private functions */
 
-    int getPointCloudPCL(const sensor_msgs::PointCloud2 &pc2, PointCloudT &cloud_out);
+    int getPointCloudPCL(const sensor_msgs::PointCloud2 &pc2, PointCloudSourceT &cloud_out);
     void groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_truth);
 
     void init(void);
@@ -144,7 +127,6 @@ namespace ramon_slam3d
     void inertialCallback(const sensor_msgs::Imu::ConstPtr& imu);
 
     void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2);
-    void pointCloudCallback2(const sensor_msgs::PointCloud2ConstPtr& pc2ptr);
 
     void publishOdometry(void);
     void publishTransform(void);

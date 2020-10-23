@@ -38,7 +38,7 @@ include
   ${catkin_INCLUDE_DIRS}
 )
 
-add_library(map3d_utils src/map3d_utils.cpp)
+# add_library(map3d_utils src/map3d_utils.cpp)
 
 add_executable(disparity src/disparity.cpp)
 target_link_libraries(disparity ${catkin_LIBRARIES} ${OpenCV_LIBS})
@@ -47,4 +47,7 @@ add_executable(pcl_test src/pcl_test.cpp)
 target_link_libraries(pcl_test ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 add_executable(slam3d src/main.cpp src/slam3d.cpp)
-target_link_libraries(slam3d ${catkin_LIBRARIES} ${PCL_LIBRARIES} map3d_utils)
+target_link_libraries(slam3d ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+add_executable(holz_rgbd src/holz_rgbd.cpp)
+target_link_libraries(holz_rgbd ${catkin_LIBRARIES} ${PCL_LIBRARIES})

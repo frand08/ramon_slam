@@ -27,6 +27,7 @@
 
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/registration/correspondence_rejection_distance.h>
+#include <pcl/registration/correspondence_rejection_median_distance.h>
 #include <pcl/registration/transformation_estimation_svd.h>
 
 // Types
@@ -210,10 +211,10 @@ rejectBadCorrespondences(const pcl::CorrespondencesPtr &all_correspondences,
                          float max_dist,
                          pcl::Correspondences &remaining_correspondences)
 {
-  pcl::registration::CorrespondenceRejectorDistance rej;
+  pcl::registration::CorrespondenceRejectorMedianDistance rej;
   rej.setInputSource<PointInT>(keypoints_src);
   rej.setInputTarget<PointInT>(keypoints_tgt);
-  rej.setMaximumDistance (max_dist);    // 1m
+  // rej.setMaximumDistance (max_dist);    // 1m
   rej.setInputCorrespondences(all_correspondences);
   rej.getCorrespondences(remaining_correspondences);
 }
@@ -224,6 +225,12 @@ int
 main (int argc, char **argv)
 {
   ros::init(argc, argv, "pcl_test");
+
+  // Node handle
+  ros::NodeHandle nh("~");
+
+  std::string cloud_reg_str;
+  std::string cloud_prev_str;
 
   // Point clouds
   PointCloudInT::Ptr cloud1(new PointCloudInT);
@@ -237,10 +244,22 @@ main (int argc, char **argv)
   std::vector < PointCloudNormalT::Ptr, Eigen::aligned_allocator <PointCloudNormalT::Ptr> > clouds_normal;
   std::vector < PointCloudFeatureT::Ptr, Eigen::aligned_allocator <PointCloudFeatureT::Ptr> > clouds_features;
 
+  if (!nh.getParam("cloud_reg", cloud_reg_str))
+  {
+    ROS_ERROR("Input cloud error");
+    return -1;
+  }
+
+  if (!nh.getParam("cloud_prev", cloud_prev_str))
+  {
+    ROS_ERROR("Input cloud error");
+    return -1;
+  }
+
   // Load object and scene
   pcl::console::print_highlight("Loading point clouds...\n");
-  if (pcl::io::loadPCDFile<PointInT>("/home/fdominguez/Downloads/Tests_PCL/Inputs2/test_pcd_raw_1.pcd", *cloud1) < 0 ||
-      pcl::io::loadPCDFile<PointInT>("/home/fdominguez/Downloads/Tests_PCL/Inputs2/test_pcd_raw_20.pcd", *cloud20) < 0)  
+  if (pcl::io::loadPCDFile<PointInT>(cloud_prev_str, *cloud1) < 0 ||
+      pcl::io::loadPCDFile<PointInT>(cloud_reg_str, *cloud20) < 0)  
   {
     pcl::console::print_error("Error loading file!\n");
     return (1);
@@ -263,6 +282,7 @@ main (int argc, char **argv)
   tr = pose.matrix();
   // pcl::transformPointCloud(*cloud1, *cloud20, tr);
   clouds.push_back(cloud20);
+  *map = *cloud1 + *cloud20;
 
   // pcl::console::print_highlight("Real transform\n");
   // pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", tr (0,0), tr (0,1), tr (0,2));
@@ -275,7 +295,7 @@ main (int argc, char **argv)
 
   pcl::console::print_highlight("Downsampling...\n");
   pcl::VoxelGrid<PointInT> grid;
-  const float leaf = 0.05f;
+  const float leaf = 0.1f;
   grid.setLeafSize(leaf, leaf, leaf);
   for(int i = 0; i < clouds.size(); i++)
   {
@@ -291,6 +311,11 @@ main (int argc, char **argv)
   {
     PointCloudInT::Ptr keypoints_src(new PointCloudInT);
     estimateSIFTKeypoints(clouds[i], 0.005, 10, 8, 1.5, *keypoints_src);
+// const float min_scale = 0.0005; 
+// const int nr_octaves = 4; 
+// const int nr_scales_per_octave = 5; 
+// const float min_contrast = 1; 
+    // estimateSIFTKeypoints(clouds[i], 0.0005, 4, 5, 1, *keypoints_src);
     // estimateKeypoints(clouds[i], 1, *keypoints_src);
     clouds_keypoints.push_back(keypoints_src);
   }
@@ -321,34 +346,35 @@ main (int argc, char **argv)
                           good_correspondences (new pcl::Correspondences);
   findCorrespondences(clouds_features[0], clouds_features[1], *all_correspondences);
 
-  pcl::console::print_highlight("Rejecting correspondences based on their XYZ distance...\n");
+  pcl::console::print_highlight("Rejecting correspondences based on their XYZ distance (Median)...\n");
   // Reject correspondences based on their XYZ distance
   rejectBadCorrespondences(all_correspondences, clouds_keypoints[0], clouds_keypoints[1], 1, *good_correspondences);
 
-  pcl::console::print_highlight("RANSAC...\n");
-  Eigen::Matrix4f r_tr = RANSAC(clouds_keypoints[0], clouds_features[0], clouds_keypoints[1], clouds_features[1], leaf);
+  // pcl::console::print_highlight("RANSAC...\n");
+  // Eigen::Matrix4f r_tr = RANSAC(clouds_keypoints[0], clouds_features[0], clouds_keypoints[1], clouds_features[1], leaf);
 
-  pcl::console::print_highlight("RANSAC estimated transform\n");
-  pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", r_tr (0,0), r_tr (0,1), r_tr (0,2));
-  pcl::console::print_info("R = | %6.3f %6.3f %6.3f | \n", r_tr (1,0), r_tr (1,1), r_tr (1,2));
-  pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", r_tr (2,0), r_tr (2,1), r_tr (2,2));
-  pcl::console::print_info("\n");
-  pcl::console::print_info("t = < %0.3f, %0.3f, %0.3f >\n", r_tr (0,3), r_tr (1,3), r_tr (2,3));
-  pcl::console::print_info("\n");
+  // pcl::console::print_highlight("RANSAC estimated transform\n");
+  // pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", r_tr (0,0), r_tr (0,1), r_tr (0,2));
+  // pcl::console::print_info("R = | %6.3f %6.3f %6.3f | \n", r_tr (1,0), r_tr (1,1), r_tr (1,2));
+  // pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", r_tr (2,0), r_tr (2,1), r_tr (2,2));
+  // pcl::console::print_info("\n");
+  // pcl::console::print_info("t = < %0.3f, %0.3f, %0.3f >\n", r_tr (0,3), r_tr (1,3), r_tr (2,3));
+  // pcl::console::print_info("\n");
 
   // pcl::transformPointCloud(*clouds_features[0], *clouds_features[0], r_tr);
-  pcl::transformPointCloud(*clouds_keypoints[0], *clouds_keypoints[0], r_tr);
+  // pcl::transformPointCloud(*clouds_keypoints[0], *clouds_keypoints[0], r_tr);
 
-  pcl::transformPointCloud(*clouds[0], *clouds[0], r_tr);
+  // pcl::transformPointCloud(*clouds[0], *clouds[0], r_tr);
+  // pcl::transformPointCloud(*clouds[1], *clouds[1], r_tr);
 
   pcl::console::print_highlight("Estimating transform...\n");
   // Obtain the best transformation between the two sets of keypoints given the remaining correspondences
-  // pcl::registration::TransformationEstimationSVD<PointInT, PointInT> trans_est;
-  // trans_est.estimateRigidTransformation(*clouds_keypoints[0], *clouds_keypoints[1], *good_correspondences, transform);
+  pcl::registration::TransformationEstimationSVD<PointInT, PointInT> trans_est;
+  trans_est.estimateRigidTransformation(*clouds_keypoints[0], *clouds_keypoints[1], *good_correspondences, transform);
   // transform = ICP(clouds_keypoints[0], clouds_keypoints[1]);
-  transform = ICP(clouds[0], clouds[1]);
+  // transform = ICP(clouds[0], clouds[1]);
 
-  transform *= r_tr; // * transform;
+  // transform = r_tr * transform;
   pcl::console::print_highlight("ICP estimated transform\n");
   pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", transform (0,0), transform (0,1), transform (0,2));
   pcl::console::print_info("R = | %6.3f %6.3f %6.3f | \n", transform (1,0), transform (1,1), transform (1,2));
@@ -356,20 +382,8 @@ main (int argc, char **argv)
   pcl::console::print_info("\n");
   pcl::console::print_info("t = < %0.3f, %0.3f, %0.3f >\n", transform (0,3), transform (1,3), transform (2,3));
   pcl::console::print_info("\n");
-
-  PointCloudInT::Ptr map2(new PointCloudInT);
-  pcl::transformPointCloud(*cloud20, *cloud40, transform);
-  *map = *cloud1 + *cloud20;
-  pcl::transformPointCloud(*cloud1, *cloud65, transform);
-  *map2 = *cloud20 + *cloud65;
-  pcl::io::savePCDFileASCII("/home/fdominguez/Downloads/Tests_PCL/Outputs/final_3_rawsum.pcd", *map);
-  std::cout << "Saved "
-            << " data points to final_3_troftr.pcd"
-            << std::endl;
-  pcl::io::savePCDFileASCII("/home/fdominguez/Downloads/Tests_PCL/Outputs/final_3_troforiginal.pcd", *map2);
-  std::cout << "Saved "
-            << " data points to final_3_troforiginal.pcd"
-            << std::endl;
+  
+  ros::spinOnce();
   
   return (0);
 }

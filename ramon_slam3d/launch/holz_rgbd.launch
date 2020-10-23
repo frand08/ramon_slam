@@ -1,0 +1,16 @@
+<launch>
+
+  <!-- bagfile params -->
+  <arg name="cloud_reg"        default="$(find ramon_slam3d)/pcd/rosbot/turtlebot3_world/2020-08-16-12-15-37/cloud26.pcd"/>
+  <arg name="cloud_prev"       default="$(find ramon_slam3d)/pcd/rosbot/turtlebot3_world/2020-08-16-12-15-37/cloud27.pcd"/>
+
+  <node name="holz_rgbd"	
+        pkg="ramon_slam3d"  
+        type="holz_rgbd" 
+        output="screen"
+        clear_params="true">
+    <param name="cloud_reg" value="$(arg cloud_reg)"/>
+    <param name="cloud_prev" value="$(arg cloud_prev)"/>
+  </node>
+
+</launch>

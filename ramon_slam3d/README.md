@@ -6,6 +6,7 @@ Dependencies
 * [*ramon_msgs*](https://gitlab.frba.utn.edu.ar/utnbadrone/utnbadrone)
 * [*eigen3*](http://eigen.tuxfamily.org/index.php?title=Main_Page)
 * [*PCL*](https://pointclouds.org/)
+* [*pcl_ros*](http://wiki.ros.org/pcl_ros)
 * [*openni2_launch*](http://wiki.ros.org/openni2_launch)
 
 --------------
@@ -24,6 +25,9 @@ Follow the ROS tutorials
     
 ### Install PCL library
     $ sudo apt install libpcl-dev
+
+### Install pcl_ros
+    $ sudo apt install ros-$ROS_DISTRO-pcl-ros
 
 ### Install Openni2_launch
     $ sudo apt-get install ros-$ROS_DISTRO-openni2-launch 

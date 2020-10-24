@@ -9,24 +9,24 @@
  *
  */
 
-#include "map_utils.h"
+#include "map2d_utils.h"
 
 /* Public Functions */
 
 /**
- * @brief Construct a new MapUtils::MapUtils object
+ * @brief Construct a new Map2DUtils::Map2DUtils object
  *
  */
-MapUtils::MapUtils()
+Map2DUtils::Map2DUtils()
 {
 
 }
 
 /**
- * @brief Destroy the MapUtils::MapUtils object
+ * @brief Destroy the Map2DUtils::Map2DUtils object
  *
  */
-MapUtils::~MapUtils()
+Map2DUtils::~Map2DUtils()
 {
 
 }
@@ -41,7 +41,7 @@ MapUtils::~MapUtils()
  * @param res
  * @param point
  */
-int MapUtils::bresenhamLineAlgorithm(double x0, double y0, double x1, double y1,
+int Map2DUtils::bresenhamLineAlgorithm(double x0, double y0, double x1, double y1,
                                          std::vector<geometry_msgs::Point32>& point)
 {
   int ret = -1;
@@ -82,7 +82,7 @@ int MapUtils::bresenhamLineAlgorithm(double x0, double y0, double x1, double y1,
  * @param std_dev
  * @return double
  */
-double MapUtils::gaussianBlur1D(double x0, double x1, double std_dev)
+double Map2DUtils::gaussianBlur1D(double x0, double x1, double std_dev)
 {
   // Qian2019 - P.7
   // erf: error function
@@ -98,7 +98,7 @@ double MapUtils::gaussianBlur1D(double x0, double x1, double std_dev)
  * @param std
  * @return double
  */
-double MapUtils::gaussianBlurIntegral(double a, double b, double c, double std)
+double Map2DUtils::gaussianBlurIntegral(double a, double b, double c, double std)
 {
   // Qian2019 - P.7
   // erf: error function
@@ -111,7 +111,7 @@ double MapUtils::gaussianBlurIntegral(double a, double b, double c, double std)
  * @param value Probability value
  * @return double logit(value)
  */
-double MapUtils::getLogitFromProba(double value)
+double Map2DUtils::getLogitFromProba(double value)
 {
   // Avoid infinite values
   if (value > 0.99)
@@ -128,7 +128,7 @@ double MapUtils::getLogitFromProba(double value)
  * @param value
  * @return double
  */
-double MapUtils::getProbaFromLogit(double value)
+double Map2DUtils::getProbaFromLogit(double value)
 {
   return (std::exp(value) / (1 + std::exp(value)));
 }
@@ -146,7 +146,7 @@ double MapUtils::getProbaFromLogit(double value)
  * @param direction
  * @param point
  */
-void MapUtils::bresenhamLineHigh(double x0, double y0, double x1, double y1, int direction,
+void Map2DUtils::bresenhamLineHigh(double x0, double y0, double x1, double y1, int direction,
                                     std::vector<geometry_msgs::Point32>& point)
 {
   double dx = x1 - x0;
@@ -191,7 +191,7 @@ void MapUtils::bresenhamLineHigh(double x0, double y0, double x1, double y1, int
  * @param direction
  * @param point
  */
-void MapUtils::bresenhamLineLow(double x0, double y0, double x1, double y1, int direction,
+void Map2DUtils::bresenhamLineLow(double x0, double y0, double x1, double y1, int direction,
                                    std::vector<geometry_msgs::Point32>& point)
 {
   double dx = x1 - x0;
@@ -236,7 +236,7 @@ void MapUtils::bresenhamLineLow(double x0, double y0, double x1, double y1, int 
  * @param index_y Index y of the point in the map
  * @param point Point value
  */
-void MapUtils::logitUpdate(Eigen::Ref<Eigen::MatrixXd> m, Eigen::Vector2i index, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res)
+void Map2DUtils::logitUpdate(Eigen::Ref<Eigen::MatrixXd> m, Eigen::Vector2i index, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res)
 {
   double logit_t0 = this->getLogitFromProba(point_noinfo_);
   Eigen::Matrix3d likelihood;
@@ -268,7 +268,7 @@ void MapUtils::logitUpdate(Eigen::Ref<Eigen::MatrixXd> m, Eigen::Vector2i index,
  * @param std_dev Standard deviation of point
  * @param res Map resolution
  */
-void MapUtils::getOccupancyLikelihood(Eigen::Matrix3d& likelihood, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res)
+void Map2DUtils::getOccupancyLikelihood(Eigen::Matrix3d& likelihood, Eigen::Vector2d point, Eigen::Vector2d std_dev, double res)
 {
   // x likelihood values
   double Px1x2, Px2x3, Px3x4;
@@ -342,7 +342,7 @@ void MapUtils::getOccupancyLikelihood(Eigen::Matrix3d& likelihood, Eigen::Vector
  * @param theta rotation in radians
  * @return Eigen::Matrix2Xd
  */
-Eigen::Matrix2Xd MapUtils::rotateAndTranslate2D(Eigen::Matrix2Xd matrix, double x, double y, double theta)
+Eigen::Matrix2Xd Map2DUtils::rotateAndTranslate2D(Eigen::Matrix2Xd matrix, double x, double y, double theta)
 {
   // This class is equivalent to a single scalar representing a counter clock wise rotation as a single angle in radian.
   Eigen::Rotation2Dd rot2(theta);

@@ -29,7 +29,7 @@
 #include <tf/transform_broadcaster.h>
 #include <fstream>
 
-#include "map_utils.h"
+#include "map2d_utils.h"
 
 #define MAP_IDX(map_width, x, y) ((map_width) * (y) + (x))
 #define DEBUG_MODE -5
@@ -58,7 +58,7 @@ namespace ramon_slam2d
 	* @brief Clase para representar celdas.
 	*/
 
-  class SLAM2D : public MapUtils
+  class SLAM2D : public Map2DUtils
   {
   public:
     /* Public functions */

@@ -9,21 +9,21 @@
  *
  */
 
-#ifndef _map_utils_h
-#define _map_utils_h
+#ifndef _map2d_utils_h
+#define _map2d_utils_h
 
 #include <geometry_msgs/Point32.h>
 #include <Eigen/Dense>
 
 	/**
-	* @class MapUtils
+	* @class Map2DUtils
 	* @brief Clase para representar celdas.
 	*/
-  class MapUtils
+  class Map2DUtils
   {
   public:
-    MapUtils();
-    ~MapUtils();
+    Map2DUtils();
+    ~Map2DUtils();
 
     int bresenhamLineAlgorithm(double x0, double y0, double x1, double y1, std::vector<geometry_msgs::Point32>& point);
     double gaussianBlur1D(double x0, double x1, double std_dev);
@@ -49,4 +49,4 @@
 
   };
 
-#endif //_map_utils_h
+#endif //_map2d_utils_h

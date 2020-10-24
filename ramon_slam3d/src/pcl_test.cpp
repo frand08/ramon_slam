@@ -198,7 +198,7 @@ findCorrespondences(const PointCloudFeatureT::Ptr &fpfhs_src,
                     pcl::Correspondences &all_correspondences)
 {
   pcl::registration::CorrespondenceEstimation<FeatureT, FeatureT> est;
-  est.setInputCloud(fpfhs_src);
+  est.setInputSource(fpfhs_src);
   est.setInputTarget(fpfhs_tgt);
   est.determineReciprocalCorrespondences(all_correspondences);
 }

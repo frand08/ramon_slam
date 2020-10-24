@@ -118,7 +118,7 @@ namespace ramon_slam3d
      */
     int 
     computeNormalSpaceSampling(const boost::shared_ptr<const pcl::PointCloud<PointT> > &src,
-                               pcl::Indices &walls_indices,
+                               std::vector<int> &walls_indices,
                                float sample,
                                float bins = 2,
                                float seed = 0)
@@ -260,9 +260,6 @@ namespace ramon_slam3d
       boost::shared_ptr<pcl::PointCloud<PointT> > cloud_reg_normals_aux(new pcl::PointCloud<PointT>);
       boost::shared_ptr<pcl::PointCloud<PointT> > cloud_prev_normals_aux(new pcl::PointCloud<PointT>);
 
-      pcl::Indices cloud_reg_indices;
-      pcl::Indices cloud_prev_indices;
-
       std::vector<int> cloud_reg_indices_ign;
       std::vector<int> cloud_prev_indices_ign;
 
@@ -326,7 +323,7 @@ namespace ramon_slam3d
     {
       boost::shared_ptr<pcl::PointCloud<PointT> > cloud_aux(new pcl::PointCloud<PointT>);
       
-      pcl::Indices cloud_indices;
+      std::vector<int> cloud_indices;
 
       std::vector<int> cloud_indices_ign;
 

@@ -29,7 +29,7 @@ include
   ${catkin_INCLUDE_DIRS}
 )
 
-add_library(map_utils src/map_utils.cpp)
+add_library(map2d_utils src/map2d_utils.cpp)
 
 add_executable(slam2d src/main.cpp src/slam2d.cpp)
-target_link_libraries(slam2d ${catkin_LIBRARIES} map_utils)
+target_link_libraries(slam2d ${catkin_LIBRARIES} map2d_utils)

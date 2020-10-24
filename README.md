@@ -58,10 +58,8 @@ After following installation steps...
 ### SLAM3D
 
 #### Download sample bagfile and extract it in ramon_simulation/bagfiles/rosbot
-    $ roscd ramon_simulation/bagfiles/rosbot
-    $ wget https://drive.google.com/file/d/1g-gjRaW8C2rkBwlpe2pA-rbfG6eYGbCE/view?usp=sharing
-    $ unzip turtlebot3_world.zip
-    $ rm turtlebot3_world.zip
+* [turtlebot3_world](https://drive.google.com/file/d/1g-gjRaW8C2rkBwlpe2pA-rbfG6eYGbCE/view?usp=sharing)
+
 #### Run record
     $ roslaunch ramon_slam3d ramon_slam3d_examples.launch
 

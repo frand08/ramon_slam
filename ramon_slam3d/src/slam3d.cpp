@@ -10,6 +10,7 @@
  */
 
 #include "slam3d.h"
+#include <pcl/filters/voxel_grid.h>
 
 using namespace ramon_slam3d;
 
@@ -45,17 +46,17 @@ SLAM3D::~SLAM3D()
  */
 void SLAM3D::groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_truth)
 {
-  static nav_msgs::Path real_odom;
+  static nav_msgs::Path real_path;
   nav_msgs::Odometry gt = *ground_truth;
   geometry_msgs::PoseStamped real_pose;
   real_pose.header.stamp = ros::Time::now();
-  real_odom.header.stamp = real_pose.header.stamp;
-  real_pose.header.frame_id = "real_odom";
-  real_odom.header.frame_id = "real_odom";
+  real_path.header.stamp = real_pose.header.stamp;
+  real_pose.header.frame_id = "real_path";
+  real_path.header.frame_id = "real_path";
   
   // If the ground truth is used, the first value is stored, so that it 
   // has the same starting point as the estimated pose of the algorithm.
-#ifndef USE_REAL_ODOM_ONLY
+#ifndef USE_REAL_path_ONLY
   if(!got_first_ground_truth_)
 #endif
 
@@ -76,7 +77,7 @@ void SLAM3D::groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_trut
     //           rot(1,0), rot(1,1), rot(1,2), gt.pose.pose.position.y,
     //           rot(2,0), rot(2,1), rot(2,2), gt.pose.pose.position.z,
     //           0, 0, 0, 1;
-#ifndef USE_REAL_ODOM_ONLY
+#ifndef USE_REAL_path_ONLY
     std::cout << "First trans_\n" << trans_ << std::endl;
 #endif
   }
@@ -87,8 +88,8 @@ void SLAM3D::groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_trut
     real_pose.pose.position.z = 0;
     real_pose.pose.orientation = gt.pose.pose.orientation;
 
-    real_odom.poses.push_back(real_pose);
-    real_odom_pub_.publish(real_odom);
+    real_path.poses.push_back(real_pose);
+    real_path_pub_.publish(real_path);
   }
 }
 
@@ -176,7 +177,7 @@ void SLAM3D::init(void)
 void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
 {
   static int count = 0;
-  static nav_msgs::Path odom;
+  static nav_msgs::Path path;
   geometry_msgs::PoseStamped pose;
   ros::Time now = ros::Time::now();
   ros::Time tf_expiration;
@@ -194,9 +195,9 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
 
   count++;
   
-  // Init pose and odom frames
-  pose.header.frame_id = "robot_odom";
-  odom.header.frame_id = "robot_odom";
+  // Init pose and path frames
+  pose.header.frame_id = "robot_path";
+  path.header.frame_id = "robot_path";
 
   // If ground truth is used, init the transform with that data
   if(publish_ground_truth_ && !got_first_ground_truth_)
@@ -227,8 +228,15 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
     // Store input values in previous ones
     *cloud_prev_filtered = *cloud_reg_filtered;
 
+    // Downsample map to publish
+    pcl::VoxelGrid<PointSourceT> grid;
+    const float leaf = 0.1f;
+    grid.setLeafSize(leaf, leaf, leaf);
+    grid.setInputCloud(cloud_prev_filtered);
+    grid.filter(*cloud_reg_filtered_aux);  
     // Store first cloud in map
-    *cloud2_map_ = *cloud_prev_filtered;
+    // *cloud2_map_ = *cloud_prev_filtered;
+    *cloud2_map_ = *cloud_reg_filtered_aux;
     
     used_trans_ << 1, 0, 0, 0,
                    0, 1, 0, 0,
@@ -252,8 +260,16 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
     used_trans_ = transform;
   }
   
+  // Downsample map to publish
+  pcl::VoxelGrid<PointSourceT> grid;
+  const float leaf = 0.1f;
+  grid.setLeafSize(leaf, leaf, leaf);
+  grid.setInputCloud(cloud_prev_filtered);
+  grid.filter(*cloud_reg_filtered_aux);    
+
   // Add points to map
-  *cloud2_map_ += *cloud_prev_filtered;
+  // *cloud2_map_ += *cloud_prev_filtered;
+  *cloud2_map_ += *cloud_reg_filtered_aux;
 
   // Convert from PCL data to ROS message
   sensor_msgs::PointCloud2 output;
@@ -262,7 +278,7 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
 
   map_pub_.publish(output);
 
-  odom.header.stamp = now;
+  path.header.stamp = now;
   pose.header.stamp = now;
   pose.pose.position.x = trans_(0,3);
   pose.pose.position.y = trans_(1,3);
@@ -272,8 +288,8 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
   pose.pose.orientation.y = q.y();
   pose.pose.orientation.z = q.z();
   pose.pose.orientation.w = q.w();
-  odom.poses.push_back(pose);
-  odom_pub_.publish(odom);
+  path.poses.push_back(pose);
+  path_pub_.publish(path);
   end = ros::WallTime::now();
   double execution_time = (end - start).toNSec() * 1e-6;
   ROS_INFO_STREAM_COND(debug_ < 0, "Exectution time (ms): " << execution_time);
@@ -290,10 +306,10 @@ void SLAM3D::start(void)
   if(publish_ground_truth_)
   {
     ground_truth_sub_ = nh_.subscribe(ground_truth_topic_, 1, &SLAM3D::groundTruthCallback, this);
-    real_odom_pub_ = nh_.advertise<nav_msgs::Path>("real_odom",1);
+    real_path_pub_ = nh_.advertise<nav_msgs::Path>("real_path",1);
   }
 
-  odom_pub_ = nh_.advertise<nav_msgs::Path>("robot_odom", 1);
+  path_pub_ = nh_.advertise<nav_msgs::Path>("robot_path", 1);
 
   pointcloud_sub_ = nh_.subscribe<sensor_msgs::PointCloud2>(depth_points_topic_, 1, &SLAM3D::pointCloudCallback, this);
   started_ = true;

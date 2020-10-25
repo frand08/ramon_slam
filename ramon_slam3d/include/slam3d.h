@@ -81,8 +81,8 @@ namespace ramon_slam3d
     bool use_imu_;
     bool got_imu_data_;
 
-    // Odom usage
-    bool pub_odom_;
+    // Path usage
+    bool pub_path_;
 
     int debug_;
   
@@ -98,9 +98,8 @@ namespace ramon_slam3d
     PointCloudSourceT::Ptr cloud2_map_;
 
     // ROS Publishers
-    ros::Publisher camera_odom_pub_;
-    ros::Publisher real_odom_pub_;
-    ros::Publisher odom_pub_;
+    ros::Publisher real_path_pub_;
+    ros::Publisher path_pub_;
     ros::Publisher map_pub_;
 
     // ROS Subscribers

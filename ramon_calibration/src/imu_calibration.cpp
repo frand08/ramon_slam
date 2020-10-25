@@ -100,6 +100,8 @@ int IMUCalibration::calibrate(void)
 int IMUCalibration::correctAccelValues(const Eigen::Ref<const Eigen::MatrixXf> accel_in, Eigen::Ref<Eigen::MatrixXf> accel_out)
 {
     this->accel_cal_.correctValues(accel_in, accel_out);
+
+    return 0;
 }
 
 /**

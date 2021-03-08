@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 2.8.3)
 project(ramon_slam3d)
 
 ## Compile as C++14, PCL needs c++14 or above
-add_compile_options(-std=c++14)
+# -march=native is good in general for release builds of any software and not only math intensive. 
+# -mfpmath=sse enables use of XMM registers in floating point instructions
+add_compile_options(-std=c++14 -O3 -mfpmath=sse)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -12,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   tf
   pcl_ros
+  eigen_conversions
 )
 
 find_package(OpenCV REQUIRED)

@@ -10,6 +10,8 @@ Dependencies
 * [*pcl_ros*](http://wiki.ros.org/pcl_ros)
 * [*openni2_launch*](http://wiki.ros.org/openni2_launch)
 * [*teleop_twist_keyboard*](http://wiki.ros.org/teleop_twist_keyboard)
+* [*robot_localization*](http://wiki.ros.org/robot_localization)
+* [*matplotlib*]()
 
 --------------
 ## Installation Steps
@@ -24,7 +26,10 @@ Follow the ROS tutorials
     $ cd /usr/include
     $ sudo ln -sf eigen3/Eigen Eigen
     $ sudo ln -sf eigen3/unsupported unsupported
-    
+
+### Install Matplotlib
+    $ pip3 install matplotlib
+
 ### Install PCL library
     $ sudo apt install libpcl-dev
 
@@ -36,6 +41,9 @@ Follow the ROS tutorials
 
 ### Install telelop_twist_keyboard
     $ sudo apt-get install ros-$ROS_DISTRO-teleop-twist-keyboard
+
+### Install robot_localization
+    $ sudo apt install ros-$ROS_DISTRO-robot-localization
 
 ### Clone repo and switch to develop branch
     $ cd ~/catkin_ws/src

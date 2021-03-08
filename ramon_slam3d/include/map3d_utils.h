@@ -305,6 +305,9 @@ namespace ramon_slam3d
         // Reject bad correspondences
         this->rejectBadCorrespondencesNormals(all_correspondences, cloud_reg_normals_aux, cloud_reg_normals_aux, cloud_prev_normals, cloud_prev_normals, weights, *good_correspondences);
 
+        if(good_correspondences->size() < 4)
+          return -1;
+
         // Find transform
         this->estimateFinalTransform(cloud_reg_normals_aux, cloud_prev_normals, good_correspondences, weights, transform_reg);
 

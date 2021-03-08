@@ -32,6 +32,8 @@
 
 #include <pcl/io/pcd_io.h>
 
+#include <eigen_conversions/eigen_msg.h>
+
 #include "map3d_utils.h"
 
 #define DEBUG_MODE -5
@@ -71,6 +73,7 @@ namespace ramon_slam3d
     std::string map_frame_;
     std::string pointcloud_frame_;
     std::string pcd_save_location_;
+    std::string extodometry_topic_name_;
 
     // Topic names
     std::string depth_points_topic_;
@@ -84,6 +87,11 @@ namespace ramon_slam3d
     // Path usage
     bool pub_path_;
 
+    // External odom usage
+    bool use_ext_odom_;
+    bool got_ext_odom_;
+
+    
     int debug_;
   
     // Save in pcd data or not
@@ -101,10 +109,12 @@ namespace ramon_slam3d
     ros::Publisher real_path_pub_;
     ros::Publisher path_pub_;
     ros::Publisher map_pub_;
+    ros::Publisher odom_pub_;
 
     // ROS Subscribers
     ros::Subscriber pointcloud_sub_;
     ros::Subscriber ground_truth_sub_;
+    ros::Subscriber extodom_sub_;
 
     // Check if start() was called
     bool started_;
@@ -114,8 +124,9 @@ namespace ramon_slam3d
     bool got_first_ground_truth_;
 
     // Transformation matrix (icp transform is float)
-    Eigen::Matrix4f trans_;
-    Eigen::Matrix4d used_trans_;
+    Eigen::Matrix4d trans_;
+    Eigen::Matrix4d last_trans_;
+    Eigen::Matrix4d ext_trans_;
     /* Private functions */
 
     int getPointCloudPCL(const sensor_msgs::PointCloud2 &pc2, PointCloudSourceT &cloud_out);
@@ -126,6 +137,8 @@ namespace ramon_slam3d
     void inertialCallback(const sensor_msgs::Imu::ConstPtr& imu);
 
     void pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2);
+
+    void extOdometryCallback(const nav_msgs::Odometry::ConstPtr& odomptr);
 
     void publishOdometry(void);
     void publishTransform(void);

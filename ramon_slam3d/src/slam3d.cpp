@@ -56,10 +56,7 @@ void SLAM3D::groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_trut
   
   // If the ground truth is used, the first value is stored, so that it 
   // has the same starting point as the estimated pose of the algorithm.
-#ifndef USE_REAL_path_ONLY
   if(!got_first_ground_truth_)
-#endif
-
   {
     got_first_ground_truth_ = true;
     Eigen::Quaternionf q;
@@ -77,9 +74,8 @@ void SLAM3D::groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_trut
     //           rot(1,0), rot(1,1), rot(1,2), gt.pose.pose.position.y,
     //           rot(2,0), rot(2,1), rot(2,2), gt.pose.pose.position.z,
     //           0, 0, 0, 1;
-#ifndef USE_REAL_path_ONLY
+
     std::cout << "First trans_\n" << trans_ << std::endl;
-#endif
   }
   if(started_)
   {
@@ -141,12 +137,17 @@ void SLAM3D::init(void)
     publish_ground_truth_ = true;
   if (!nh_.getParam("std_dev", std_dev))
     std_dev = 0.1;
+  if (!nh_.getParam("extodometry_topic_name", extodometry_topic_name_))
+    use_ext_odom_ = false;
+  else
+    use_ext_odom_ = true;
 
   ROS_INFO("Params:");
   std::cout << "base_frame: " << base_frame_ << std::endl;
   std::cout << "map_frame: " << map_frame_ << std::endl;
   std::cout << "imu_frame: " << imu_frame_ << std::endl;
   std::cout << "depth_points_topic: " << depth_points_topic_ << std::endl;
+
   if(use_imu_)
   {
     std::cout << "use_imu: true" << std::endl;
@@ -162,13 +163,21 @@ void SLAM3D::init(void)
   else
     std::cout << "publish_ground_truth: false" << std::endl;
 
+  if(use_ext_odom_)
+  {
+    std::cout << "use_ext_odom: true" << std::endl;
+    std::cout << "ext_odom_topic_name: " << extodometry_topic_name_ << std::endl;    
+  }
+  else
+    std::cout << "use_ext_odom: false" << std::endl;
+
   pointcloud_frame_ = "pointcloud_slam3d";
   trans_.setIdentity();
 
+
   got_first_ground_truth_ = false;
   got_imu_data_ = false;
-
-
+  got_ext_odom_ = false;
 }
 /**
  * @brief Callback function of the PointCloud2 topic
@@ -178,11 +187,16 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
 {
   static int count = 0;
   static nav_msgs::Path path;
-  geometry_msgs::PoseStamped pose;
+  static ros::Time last = ros::Time::now();
   ros::Time now = ros::Time::now();
   ros::Time tf_expiration;
   // Para calcular tiempos del algoritmo
   ros::WallTime start, end;
+
+  Eigen::Matrix4d trans_aux;
+
+  geometry_msgs::PoseStamped pose;
+  nav_msgs::Odometry odom;
 
   // Convert the sensor_msgs/PointCloud2 data to pcl/PointCloud
   PointCloudSourceT::Ptr cloud_reg_raw(new PointCloudSourceT);
@@ -193,11 +207,18 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
 
   Eigen::Matrix4d transform;
 
+  if(use_ext_odom_)
+    trans_aux = ext_trans_;
+  else
+    trans_aux.setIdentity();
+
   count++;
   
   // Init pose and path frames
-  pose.header.frame_id = "robot_path";
-  path.header.frame_id = "robot_path";
+  pose.header.frame_id = "robot_path3d";
+  path.header.frame_id = "robot_path3d";
+  odom.header.frame_id = "odom3d";
+  odom.child_frame_id = "base_link";
 
   // If ground truth is used, init the transform with that data
   if(publish_ground_truth_ && !got_first_ground_truth_)
@@ -233,32 +254,40 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
     const float leaf = 0.1f;
     grid.setLeafSize(leaf, leaf, leaf);
     grid.setInputCloud(cloud_prev_filtered);
-    grid.filter(*cloud_reg_filtered_aux);  
+    grid.filter(*cloud_reg_filtered_aux);
+
     // Store first cloud in map
-    // *cloud2_map_ = *cloud_prev_filtered;
+    if(use_ext_odom_)
+    {
+      trans_ = trans_aux;
+      last_trans_ = trans_aux;
+    }
+    else
+      last_trans_ = trans_;
+
+    pcl::transformPointCloud(*cloud_reg_filtered_aux, *cloud_reg_filtered_aux, last_trans_);
     *cloud2_map_ = *cloud_reg_filtered_aux;
     
-    used_trans_ << 1, 0, 0, 0,
-                   0, 1, 0, 0,
-                   0, 0, 1, 0,
-                   0, 0, 0, 1;
     return;
   }
-  else
+  
+  pcl::transformPointCloud(*cloud_reg_filtered, *cloud_reg_filtered_aux, last_trans_);
+  if(this->registrationPipelineHolz(cloud_reg_filtered_aux, cloud_prev_filtered, transform) < 0)
   {
-    pcl::transformPointCloud(*cloud_reg_filtered, *cloud_reg_filtered_aux, used_trans_);
-    this->registrationPipelineHolz(cloud_reg_filtered_aux, cloud_prev_filtered, transform);
-    pcl::console::print_highlight("Estimated transform of cloud: %ld\n", count);
-    pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", transform (0,0), transform (0,1), transform (0,2));
-    pcl::console::print_info("R = | %6.3f %6.3f %6.3f | \n", transform (1,0), transform (1,1), transform (1,2));
-    pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", transform (2,0), transform (2,1), transform (2,2));
-    pcl::console::print_info("\n");
-    pcl::console::print_info("t = < %0.3f, %0.3f, %0.3f >\n", transform (0,3), transform (1,3), transform (2,3));
-    pcl::console::print_info("\n");
-    transform *= used_trans_;
-    pcl::transformPointCloud(*cloud_reg_filtered, *cloud_prev_filtered, transform);
-    used_trans_ = transform;
+    ROS_INFO("Ignored cloud");
+    return;
   }
+  pcl::console::print_highlight("Estimated transform of cloud: %ld\n", count);
+  pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", transform (0,0), transform (0,1), transform (0,2));
+  pcl::console::print_info("R = | %6.3f %6.3f %6.3f | \n", transform (1,0), transform (1,1), transform (1,2));
+  pcl::console::print_info("    | %6.3f %6.3f %6.3f | \n", transform (2,0), transform (2,1), transform (2,2));
+  pcl::console::print_info("\n");
+  pcl::console::print_info("t = < %0.3f, %0.3f, %0.3f >\n", transform (0,3), transform (1,3), transform (2,3));
+  pcl::console::print_info("\n");
+  // transform *= last_trans_;
+  pcl::transformPointCloud(*cloud_reg_filtered_aux, *cloud_prev_filtered, transform);
+  last_trans_ = transform * last_trans_;
+  // trans_ = last_trans_ * trans_;
   
   // Downsample map to publish
   pcl::VoxelGrid<PointSourceT> grid;
@@ -275,24 +304,49 @@ void SLAM3D::pointCloudCallback(const sensor_msgs::PointCloud2ConstPtr& pc2ptr)
   sensor_msgs::PointCloud2 output;
   pcl::toROSMsg (*cloud2_map_, output);
   output.header.frame_id = "map";
-
-  map_pub_.publish(output);
-
-  path.header.stamp = now;
+  
+  Eigen::AngleAxisd transformedAngleAxis(Eigen::Matrix3d(transform.block(0,0,3,3)));
+  Eigen::Vector3d angular_velocity;
+  angular_velocity << transformedAngleAxis.angle() * transformedAngleAxis.axis();
+  
   pose.header.stamp = now;
-  pose.pose.position.x = trans_(0,3);
-  pose.pose.position.y = trans_(1,3);
-  pose.pose.position.z = trans_(2,3);
-  Eigen::Quaternionf q(Eigen::Matrix3f(trans_.block(0,0,3,3)));
+  pose.pose.position.x = last_trans_(0,3);
+  pose.pose.position.y = last_trans_(1,3);
+  pose.pose.position.z = last_trans_(2,3);
+  Eigen::Quaterniond q(Eigen::Matrix3d(last_trans_.block(0,0,3,3)));
   pose.pose.orientation.x = q.x();
   pose.pose.orientation.y = q.y();
   pose.pose.orientation.z = q.z();
   pose.pose.orientation.w = q.w();
+
+  odom.header.stamp = now;
+  odom.pose.pose.position.x = last_trans_(0,3);
+  odom.pose.pose.position.y = last_trans_(1,3);
+  odom.pose.pose.position.z = last_trans_(2,3);
+  odom.pose.pose.orientation.x = q.x();
+  odom.pose.pose.orientation.y = q.y();
+  odom.pose.pose.orientation.z = q.z();
+  odom.pose.pose.orientation.w = q.w();
+  odom.twist.twist.linear.x = transform(0,3) / ((now - last).toNSec() * 1e-9);
+  odom.twist.twist.linear.y = transform(1,3) / ((now - last).toNSec() * 1e-9);
+  odom.twist.twist.linear.z = transform(2,3) / ((now - last).toNSec() * 1e-9);
+  odom.twist.twist.angular.x = angular_velocity(0) / ((now - last).toNSec() * 1e-9);
+  odom.twist.twist.angular.y = angular_velocity(1) / ((now - last).toNSec() * 1e-9);
+  odom.twist.twist.angular.z = angular_velocity(2) / ((now - last).toNSec() * 1e-9);
+
+  path.header.stamp = now;
   path.poses.push_back(pose);
+
   path_pub_.publish(path);
+  odom_pub_.publish(odom);
+  map_pub_.publish(output);
+  
   end = ros::WallTime::now();
   double execution_time = (end - start).toNSec() * 1e-6;
   ROS_INFO_STREAM_COND(debug_ < 0, "Exectution time (ms): " << execution_time);
+
+  // Update time
+  last = now;
 }
 
 /**
@@ -309,13 +363,40 @@ void SLAM3D::start(void)
     real_path_pub_ = nh_.advertise<nav_msgs::Path>("real_path",1);
   }
 
-  path_pub_ = nh_.advertise<nav_msgs::Path>("robot_path", 1);
+  if(use_ext_odom_)
+    extodom_sub_ = nh_.subscribe(extodometry_topic_name_, 1, &SLAM3D::extOdometryCallback, this);
 
+  path_pub_ = nh_.advertise<nav_msgs::Path>("robot_path3d", 1);
+
+  odom_pub_ = nh_.advertise<nav_msgs::Odometry>("robot_odom3d",1);
+  
   pointcloud_sub_ = nh_.subscribe<sensor_msgs::PointCloud2>(depth_points_topic_, 1, &SLAM3D::pointCloudCallback, this);
   started_ = true;
 }
 
 
+/**
+ * @brief Callback function of the external odometry of the vehicle
+ *
+ */
+void SLAM3D::extOdometryCallback(const nav_msgs::Odometry::ConstPtr& odomptr)
+{
+  nav_msgs::Odometry ext_odom = *odomptr;
+  Eigen::Quaterniond aux;
+  
+  tf::quaternionMsgToEigen(ext_odom.pose.pose.orientation, aux);
+  
+  ext_trans_.block(0,0,3,3) = aux.normalized().toRotationMatrix();
+  ext_trans_(0,3) = ext_odom.pose.pose.position.x;
+  ext_trans_(1,3) = ext_odom.pose.pose.position.y;
+  ext_trans_(2,3) = ext_odom.pose.pose.position.z;
+  ext_trans_(3,0) = 0;
+  ext_trans_(3,1) = 0;
+  ext_trans_(3,2) = 0;
+  ext_trans_(3,3) = 1;
+
+  got_ext_odom_ = true;
+}
 
 
 int SLAM3D::getPointCloudPCL(const sensor_msgs::PointCloud2 &pc2, PointCloudSourceT &cloud_out)

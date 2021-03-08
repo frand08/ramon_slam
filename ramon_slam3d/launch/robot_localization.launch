@@ -17,8 +17,6 @@
   <arg name="bag_rate"	      default="0.05"/>
       <!-- <arg name="bag_rate"	      default="1.0"/> -->
 
-  <!-- 3D params -->
-  <arg name="use_ramon3d"     default="true"/>
   <!-- RViz params -->
   <arg name="use_rviz"	      default="true"/>
 
@@ -33,20 +31,6 @@
 
   <include if="$(arg use_ext_odom)" file="$(find ramon_slam3d)/launch/robot_localization.launch"/>
 
-  <!-- openni2 launch include -->
-  <!-- Interesting info: http://wiki.ros.org/openni_launch/Tutorials/BagRecordingPlayback -->
-  <!-- Useful info: https://answers.ros.org/question/156541/openni2-color-point-cloud/ -->
-  <include if="$(arg use_openni)" file="$(find openni2_launch)/launch/openni2.launch">
-    <!-- <arg name="depth_registration" value="true" /> -->
-    <arg name="depth_registration" value="false" />
-    <arg name="rgb_processing" value="true" />
-    <arg name="depth_processing" value="true" />
-    <arg name="depth_registered_processing" value="true" />
-    <arg name="load_driver" value="false" />
-    <arg name="publish_tf" value="false" />  
-    <arg name="device_id" value="invalid" />
-  </include>
-
   <node if="$(arg bag_play)" 
         pkg="rosbag" 
         type="play" 
@@ -55,88 +39,49 @@
   </node>
 
   <!-- TFs -->
-  <!-- <node pkg="tf"
-        type="static_transform_publisher"
-        name="odom_broadcaster"
-        args="0.05 0.08 0 0 0 -0.7071068 0.7071068 map odom 100" >
-  </node> -->
-
-  <!-- TFs -->
   <node pkg="tf"
         type="static_transform_publisher"
-        name="odom2_broadcaster"
-        args="1.9 0.2 0 0.7071068 0 0 0.7071068 map2 odom 100" >
-  </node>
+        name="robot_path_broadcaster"
+        args="0 0 0 0 0 0 1 world robot_path3d 100" />        
 
-  <node pkg="tf"
-        type="static_transform_publisher"
-        name="odom_broadcaster"
-        args="0 0 0 0 -0.7071068 0 0.7071068 map map2 100" >
-  </node>
-
-  <node pkg="tf"
+  <!--  pkg="tf"
         type="static_transform_publisher"
         name="robot_odom_broadcaster"
-        args="0 0 0 0 0 0 1 world4 robot_path 100" >
-  </node>        
+        args="0 0 0 0 0 0 1 map robot_odom3d 100" />         -->
 
   <node pkg="tf"
         type="static_transform_publisher"
         name="world_broadcaster"
-        args="0 -0.2 0 0 0 0 1 world4 map 100" >
-  </node>
-
-  <!-- <node pkg="tf"
-        type="static_transform_publisher"
-        name="cloud_base_broadcaster"
-        args="0 0 0 0 0 0 1 world cloud_base 100" >
-  </node> -->
-
-  <!-- <node pkg="tf"
-        type="static_transform_publisher"
-        name="real_odom_broadcaster"
-        args="-0.005 0.025 0 0 0 -0.7071068 0.7071068 world real_path 100" >
-  </node> -->
+        args="0 0 0 0 0 0 1 world map 100" />
 
   <node pkg="tf"
         type="static_transform_publisher"
-        name="real2_odom_broadcaster"
-        args="0 -1.9 0 0 0 -0.7071068 0.7071068 world2 real_path 100" >
-  </node>
-  <node pkg="tf"
-        type="static_transform_publisher"
-        name="real3_odom_broadcaster"
-        args="0 0 0 -0.7071068 0 0 0.7071068 world3 world2 100" >
-  </node>
+        name="map2_broadcaster"
+        args="0 0 0 0 0 0 1 map odom 100" />
 
   <node pkg="tf"
         type="static_transform_publisher"
-        name="real4_odom_broadcaster"
-        args="0 0 0 0 0 1 0 world4 world3 100" >
-  </node>
-
-  <node pkg="tf"
-        type="static_transform_publisher"
-        name="real5_odom_broadcaster"
-        args="0 0 0 0 1 0 0 world5 world4 100" >
-  </node>
-
+        name="world2_broadcaster"
+        args="0 0 0 0 0 0 1 map odom3d 100" />
+        
   <node pkg="tf"
         type="static_transform_publisher"
         name="real_odom_broadcaster"
-        args="0 0 0 -0.7071068 0 0 0.7071068 world world5 100" >
-  </node>
+        args="-0.005 0.025 0 0 0 -0.7071068 0.7071068 world real_path 100" />
 
-  <!-- 0 0 -0.7071068 0.7071068 -->
-  <node if="$(arg use_ramon3d)"
-        name="ramon_slam3d"	
+  <node pkg="tf"
+        type="static_transform_publisher"
+        name="imu_link_broadcaster"
+        args="0 0 0 0 0 0 1 base_link imu_link 10" />
+
+  <node name="ramon_slam3d"	
         pkg="ramon_slam3d"  
         type="slam3d" 
         output="screen"
         clear_params="true">
     <!-- <param name="depth_points_topic" value="/camera/depth/points"/> -->
     <param name="depth_points_topic" value="/camera/depth_registered/points"/>
-    <!-- <param name="imu_topic" type="string" value="/imu"/> -->
+    <param name="imu_topic" type="string" value="/imu"/>
     <param name="ground_truth_topic" value="/ground_truth/state"/>
     <!-- <param name="pcd_save_location" value="$(arg pcd_save_location)"/> -->
     <param if="$(arg use_ext_odom)" name="extodometry_topic_name" value="$(arg ext_odom)"/>
@@ -146,12 +91,16 @@
   <param name="robot_description" command="$(find xacro)/xacro '$(find ramon_simulation)/urdf/rosbot/rosbot.xacro'"/>
 
   <!-- RViz -->
-  <group if="$(arg use_rviz)">
-    <node name="rviz_OG" 
+    <node if="$(arg use_rviz)"
+          name="rviz_OG" 
           pkg="rviz" 
           type="rviz" 
           args="-d $(find ramon_slam3d)/rviz/camera_map_pointcloud_path.rviz" >
     </node>
-  </group>
+
+   <node pkg="robot_localization" type="ekf_localization_node" name="ekf_odom_node" output="screen" >
+    <rosparam command="load" file="$(find ramon_slam3d)/config/ekf_localization.yaml"/>
+    <!-- <remap from="odometry/filtered" to="odom/ekf/enc_imu"/> -->
+   </node>
 
 </launch>

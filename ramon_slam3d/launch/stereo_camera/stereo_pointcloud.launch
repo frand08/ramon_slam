@@ -19,7 +19,7 @@
 
 	<group ns="stereo">
 		<!-- Run the stereo camera -->
-	    <include file="$(find ramon_slam3d)/launch/stereo_camera.launch" >
+	    <include file="$(find ramon_slam3d)/launch/stereo_camera/stereo_camera.launch" >
 			<!-- set left/right camera device and calibration url -->
 			<arg name="right_camera_dev"	value="/dev/video2" />
 			<arg name="left_camera_dev"		value="/dev/video4" />

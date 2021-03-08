@@ -8,6 +8,7 @@ Dependencies
 * [*PCL*](https://pointclouds.org/)
 * [*pcl_ros*](http://wiki.ros.org/pcl_ros)
 * [*openni2_launch*](http://wiki.ros.org/openni2_launch)
+* [*robot_localization*](http://wiki.ros.org/robot_localization)
 
 --------------
 ## Steps
@@ -31,6 +32,9 @@ Follow the ROS tutorials
 
 ### Install Openni2_launch
     $ sudo apt-get install ros-$ROS_DISTRO-openni2-launch 
+
+### Install robot_localization
+    $ sudo apt install ros-$ROS_DISTRO-robot-localization
 
 ### Download sample bagfile and extract it in ramon_simulation/bagfiles/rosbot
 * [turtebot3_world](https://drive.google.com/file/d/1g-gjRaW8C2rkBwlpe2pA-rbfG6eYGbCE/view?usp=sharing)

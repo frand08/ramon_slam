@@ -83,6 +83,7 @@ namespace ramon_slam2d
     // Topic names
     std::string scan_topic_name_;
     std::string imu_topic_name_;
+    std::string extodometry_topic_name_;
     std::string ground_truth_topic_name_;
 
     // IMU usage
@@ -90,7 +91,10 @@ namespace ramon_slam2d
     bool got_imu_data_;
 
     // Odom usage
-    bool pub_odom_;
+    bool publish_robot_path_;
+    bool publish_robot_odom_;
+    bool use_ext_odometry_;
+    bool got_ext_odom_;
 
     // Lidar counter and maximum distance value
     uint32_t laser_count_;
@@ -118,12 +122,14 @@ namespace ramon_slam2d
 
     // ROS Publishers
     ros::Publisher map_pub_;
+    ros::Publisher path_pub_;
+    ros::Publisher real_path_pub_;
     ros::Publisher odom_pub_;
-    ros::Publisher real_odom_pub_;
 
     // ROS Subscribers
     ros::Subscriber laser_sub_;
     ros::Subscriber imu_sub_;
+    ros::Subscriber extodom_sub_;
     ros::Subscriber ground_truth_sub_;
 
     // Threads
@@ -145,6 +151,7 @@ namespace ramon_slam2d
 
     // Vehicle position (x,y) and angle
     double x_, y_, theta_;
+    double ext_x_, ext_y_, ext_theta_;
     int x_iteration_, y_iteration_, theta_iteration_;
     double imu_theta_;
     double laser_imu_theta_;
@@ -164,6 +171,8 @@ namespace ramon_slam2d
     // Ground truth
     bool publish_ground_truth_;
 
+    // Odom
+    nav_msgs::Odometry odom_;
     /* Private functions */
 
     int getMaximumLikelihoodTransform(int theta_index, rigid_t& rigid);
@@ -181,9 +190,10 @@ namespace ramon_slam2d
 
     void inertialCallback(const sensor_msgs::Imu::ConstPtr& imu);
     
+    void extOdometryCallback(const nav_msgs::Odometry::ConstPtr& odomptr);
+
     void mapsUpdate(Eigen::Matrix2Xd scan_points);
 
-    void publishOdometry(void);
     void publishTransform(void);
   };
 };

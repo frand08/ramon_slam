@@ -67,16 +67,21 @@ void SLAM2D::start()
   if(use_imu_)
     imu_sub_ = nh_.subscribe(imu_topic_name_, 1, &SLAM2D::inertialCallback, this);
   
+  if(use_ext_odometry_)
+    extodom_sub_ = nh_.subscribe(extodometry_topic_name_, 1, &SLAM2D::extOdometryCallback, this);
+  
   // TF thread
   if(publish_map_to_laser_)
     transform_thread_ = new boost::thread(boost::bind(&SLAM2D::publishTransform, this));
 
-  odom_pub_ = nh_.advertise<nav_msgs::Path>("robot_odom", 1);
+  path_pub_ = nh_.advertise<nav_msgs::Path>("robot_path2d", 1);
+
+  odom_pub_ = nh_.advertise<nav_msgs::Odometry>("robot_odom2d",1);
   
   if(publish_ground_truth_)
   {
     ground_truth_sub_ = nh_.subscribe(ground_truth_topic_name_, 1, &SLAM2D::groundTruthCallback, this);
-    real_odom_pub_ = nh_.advertise<nav_msgs::Path>("real_odom",1);
+    real_path_pub_ = nh_.advertise<nav_msgs::Path>("real_path",1);
   }
   started_ = true;
 }
@@ -300,13 +305,13 @@ void SLAM2D::getRigidBodyTransform(const Eigen::Ref<const Eigen::Matrix2Xd> scan
  */
 void SLAM2D::groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_truth)
 {
-  static nav_msgs::Path real_odom;
+  static nav_msgs::Path real_path;
   nav_msgs::Odometry gt = *ground_truth;
   geometry_msgs::PoseStamped real_pose;
   real_pose.header.stamp = ros::Time::now();
-  real_odom.header.stamp = real_pose.header.stamp;
-  real_pose.header.frame_id = "real_odom";
-  real_odom.header.frame_id = "real_odom";
+  real_path.header.stamp = real_pose.header.stamp;
+  real_pose.header.frame_id = "real_path";
+  real_path.header.frame_id = "real_path";
   
   if(started_)
   {
@@ -314,8 +319,8 @@ void SLAM2D::groundTruthCallback(const nav_msgs::Odometry::ConstPtr& ground_trut
     real_pose.pose.position.y = gt.pose.pose.position.y;
     real_pose.pose.position.z = 0;
     real_pose.pose.orientation = gt.pose.pose.orientation;
-    real_odom.poses.push_back(real_pose);
-    real_odom_pub_.publish(real_odom);
+    real_path.poses.push_back(real_pose);
+    real_path_pub_.publish(real_path);
   }
 }
 
@@ -384,6 +389,10 @@ void SLAM2D::init(double res)
     publish_map_to_laser_ = false;
   else
     publish_map_to_laser_ = true;
+  if(!nh_.getParam("extodometry_topic_name", extodometry_topic_name_))
+    use_ext_odometry_ = false;
+  else
+    use_ext_odometry_ = true;
 
   ROS_INFO("Params:");
   std::cout << "base_frame: " << base_frame_ << std::endl;
@@ -406,6 +415,7 @@ void SLAM2D::init(double res)
   else
     std::cout << "publish_ground_truth: false" << std::endl;
 
+  std::cout << "publish_map_to_laser: " << publish_map_to_laser_ << std::endl;
   std::cout << "map_count: " << map_count_ << std::endl;
   std::cout << "std_dev: " << std_dev << std::endl;
 
@@ -426,9 +436,13 @@ void SLAM2D::init(double res)
   x_ = 0.0;
   y_ = 0.0;
   theta_ = 0.0;
+  ext_x_ = 0.0;
+  ext_y_ = 0.0;
+  ext_theta_ = 0.0;
   imu_theta_ = 0.0;
   
   got_imu_data_ = false;
+  got_ext_odom_ = false;
 
   occmap_.info.width = round(n_ / res_vec_(res_vec_.size()-1));
   occmap_.info.height = round(m_ / res_vec_(res_vec_.size()-1));
@@ -442,6 +456,21 @@ void SLAM2D::init(double res)
   for (int i = 0; i < round((m_ * n_) / (res_vec_(res_vec_.size()-1) * res_vec_(res_vec_.size()-1))); i++)
     occmap_.data.push_back(-1);
 
+  odom_.header.stamp = ros::Time::now();
+  odom_.header.frame_id = "robot_odom2d";
+  odom_.twist.twist.angular.x = 0.0;
+  odom_.twist.twist.angular.y = 0.0;
+  odom_.twist.twist.angular.z = 0.0;
+  odom_.twist.twist.linear.x = 0.0;
+  odom_.twist.twist.linear.y = 0.0;
+  odom_.twist.twist.linear.z = 0.0;
+  odom_.pose.pose.orientation.x = 0.0;
+  odom_.pose.pose.orientation.y = 0.0;
+  odom_.pose.pose.orientation.z = 0.0;
+  odom_.pose.pose.orientation.w = 1.0;
+  odom_.pose.pose.position.x = 0.0;
+  odom_.pose.pose.position.y = 0.0;
+  odom_.pose.pose.position.z = 0.0;
 }
 
 /**
@@ -453,7 +482,15 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
 {
   static int first_time = 1;
   static ros::Time last = ros::Time::now();
-  static nav_msgs::Path odom;
+  static nav_msgs::Path path;
+  static nav_msgs::Odometry odom;
+  
+  if(got_ext_odom_)
+  {
+    x_ = ext_x_;
+    y_ = ext_y_;
+    theta_ = ext_theta_;
+  }
   
   ros::Time now = ros::Time::now();
   geometry_msgs::PoseStamped pose;
@@ -467,8 +504,12 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   // Para calcular tiempos del algoritmo
   ros::WallTime start, end;
 
-  pose.header.frame_id = "robot_odom";
-  odom.header.frame_id = "robot_odom";
+  pose.header.frame_id = "robot_path2d";
+  path.header.frame_id = "robot_path2d";
+  
+  // odom_.header.frame_id = "robot_odom2d";
+  odom_.header.frame_id = "odom2d";
+  odom_.child_frame_id = "base_link";
 
   if (first_time)
   {
@@ -493,10 +534,6 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   // If laser count == 1, store data, otherwise get the rigid body transform
   if (laser_count_ > 1)
   {
-    // if(((now - last).toNSec() * 1e-6) < 1)
-    // {
-    //   return;      
-    // }
     this->getRigidBodyTransform(scan_points, scan_transformed);
   }
   else
@@ -520,14 +557,58 @@ void SLAM2D::laserCallback(const sensor_msgs::LaserScan::ConstPtr& scanptr)
   map_pub_.publish(occmap_);
 
 
-  odom.header.stamp = now;
+  path.header.stamp = now;
   pose.header.stamp = now;
   pose.pose.position.x = x_;
   pose.pose.position.y = y_;
   pose.pose.position.z = 0;
   pose.pose.orientation = tf::createQuaternionMsgFromYaw(theta_);
-  odom.poses.push_back(pose);
-  odom_pub_.publish(odom);
+
+  geometry_msgs::Quaternion qt_reg = tf::createQuaternionMsgFromYaw(theta_);
+  geometry_msgs::Quaternion qt_prev = odom_.pose.pose.orientation;
+
+  tf::Quaternion qt_tf_reg, qt_tf_prev;
+  tf::quaternionMsgToTF(qt_reg, qt_tf_reg);
+  tf::quaternionMsgToTF(qt_prev, qt_tf_prev);
+
+  tfScalar angle_reg = qt_tf_reg.getAngle();
+  tf::Vector3 axis_reg = qt_tf_reg.getAxis();
+  tfScalar angle_prev = qt_tf_prev.getAngle();
+  tf::Vector3 axis_prev = qt_tf_prev.getAxis();
+
+  tf::Vector3 angaxis_reg = angle_reg * axis_reg;
+  tf::Vector3 angaxis_prev = angle_prev * axis_prev;
+
+  odom_.twist.twist.linear.x = (x_ - odom_.pose.pose.position.x) / (now - odom_.header.stamp).toSec();
+  odom_.twist.twist.linear.y = (y_ - odom_.pose.pose.position.y) / (now - odom_.header.stamp).toSec();
+
+  odom_.twist.twist.angular.x = (angaxis_reg.getX() - angaxis_prev.getX()) / (now - odom_.header.stamp).toSec();
+  odom_.twist.twist.angular.y = (angaxis_reg.getY() - angaxis_prev.getY()) / (now - odom_.header.stamp).toSec();
+  odom_.twist.twist.angular.z = (angaxis_reg.getZ() - angaxis_prev.getZ()) / (now - odom_.header.stamp).toSec();
+  
+  odom_.header.stamp = now;
+  odom_.pose.pose.position.x = x_;
+  odom_.pose.pose.position.y = y_;
+
+  odom_.pose.pose.orientation = tf::createQuaternionMsgFromYaw(theta_);
+
+  for(int i = 0; i < 36; i++)
+  {
+    if(i != 0 && i != 7 && i !=14 && i != 21 && i != 28 && i != 35)
+    {
+      odom_.pose.covariance[i] = 0;
+      odom_.twist.covariance[i] = 0;
+    }
+    else
+    {
+      odom_.pose.covariance[i] = 0.05;
+      odom_.twist.covariance[i] = 0.05;
+    }
+  }
+
+  path.poses.push_back(pose);
+  path_pub_.publish(path);
+  odom_pub_.publish(odom_);
 }
 
 /**
@@ -600,8 +681,6 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
                         this->gaussianBlur1D(points_free[index].y, points_free[points_free.size()-1].y, std_dev_(1)));
 
           m(index_point(0), index_point(1)) =
-              // this->getProbaFromLogit(this->getLogitFromProba(point_free_) +
-              //                         this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
               this->getProbaFromLogit(this->getLogitFromProba(gauss) +
                                       this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
         }
@@ -609,24 +688,6 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
       index_point(0) = uint32_t(round(round(map_size(0) / res_vec_(map_index)) + scan_points(0, i) / res_vec_(map_index)));
       index_point(1) = uint32_t(round(round(map_size(1) / res_vec_(map_index)) + scan_points(1, i) / res_vec_(map_index)));
 
-      // Update occupied points in map
-      /// \fixme check if this is necessary
-      /*
-      if(map_index == res_vec_.size())
-      {
-        // Update around point option (3x3 matrix)
-        point_update(0) = scan_points(0, i) / res_vec_(map_index);
-        point_update(1) = scan_points(1, i) / res_vec_(map_index);
-        this->logitUpdate(m, index_point, point_update, std_dev_, res_vec_(map_index));
-      }
-      else
-      {
-        // One point update option
-        m(index_point(0), index_point(1)) =
-            this->getProbaFromLogit(this->getLogitFromProba(point_occupied_) +
-                                    this->getLogitFromProba(m(index_point(0), index_point(1))) - getLogitFromProba(point_noinfo_));
-      }
-      */
       // Clear free points vector
       points_free.clear();
     }
@@ -656,11 +717,17 @@ void SLAM2D::mapsUpdate(Eigen::Matrix2Xd scan_points)
 }
 
 /**
- * @brief Publishes the odometry of the vehicle
+ * @brief Callback function of the external odometry of the vehicle
  *
  */
-void SLAM2D::publishOdometry(void)
+void SLAM2D::extOdometryCallback(const nav_msgs::Odometry::ConstPtr& odomptr)
 {
+  nav_msgs::Odometry ext_odom = *odomptr;
+
+  got_ext_odom_ = true;
+  ext_x_ = ext_odom.pose.pose.position.x;
+  ext_y_ = ext_odom.pose.pose.position.y;
+  ext_theta_ = tf::getYaw(ext_odom.pose.pose.orientation);
 
 }
 

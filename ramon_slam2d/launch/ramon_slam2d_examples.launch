@@ -18,7 +18,7 @@
 	<arg name="use_rviz"	      default="true"/>
 	<arg name="use_tf"	        default="true"/>
 	<!-- <arg name="BagRate"	      default="0.01"/> -->
-	<arg name="BagRate"	      default="0.1"/>
+	<arg name="BagRate"	      default="1.0"/>
 	<arg name="StdDev"	      default="0.01"/>
 	<!-- <arg name="StdDev"	      default="0.05"/> -->
 
@@ -80,8 +80,14 @@
   <node if="$(arg use_tf)" 
         pkg="tf"
         type="static_transform_publisher"
+        name="robot_path_broadcaster"
+        args="0 0 0 0 0 0 1 world robot_path2d 100" />        
+
+  <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
         name="robot_odom_broadcaster"
-        args="0 0 0 0 0 0 1 world robot_odom 100" />        
+        args="0 0 0 0 0 0 1 map robot_odom2d 100" />        
 
   <node if="$(arg use_tf)" 
         pkg="tf"
@@ -93,7 +99,13 @@
         pkg="tf"
         type="static_transform_publisher"
         name="real_odom_broadcaster"
-        args="-0.005 0.025 0 0 0 -0.7071068 0.7071068 world real_odom 100" />
+        args="-0.005 0.025 0 0 0 -0.7071068 0.7071068 world real_path 100" />
+
+  <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="imu_link_broadcaster"
+        args="0 0 0 0 0 0 1 base_link imu_link 100" />
 
   <!-- Delay -->
   <arg name="node_start_delay" default="2.0" />
@@ -111,7 +123,7 @@
       <param name="map_count" value="4"/>
       <param name="std_dev" value="$(arg StdDev)"/>
   </node>
-!-- RVIZ visualisation -->
+<!-- RVIZ visualisation -->
 <node if="$(arg use_rviz)" 
         name="rviz_OG" 
         pkg="rviz" 

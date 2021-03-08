@@ -250,9 +250,6 @@ void Map2DUtils::logitUpdate(Eigen::Ref<Eigen::MatrixXd> m, Eigen::Vector2i inde
       {
         m(index(0) + x - 1, index(1) + y - 1) =
                1 - (1 - m(index(0) + x - 1, index(1) + y - 1)) * likelihood(x, y);
-        // m(index(0) + x - 1, index(1) + y - 1) =
-        //     this->getProbaFromLogit(this->getLogitFromProba(likelihood(x, y)) +
-        //                             this->getLogitFromProba(m(index(0) + x - 1, index(1) + y - 1)) - logit_t0);
       }
     }
   }
@@ -314,22 +311,6 @@ void Map2DUtils::getOccupancyLikelihood(Eigen::Matrix3d& likelihood, Eigen::Vect
   likelihood(2, 0) = point_occupied_ * (1 - abs(Px1x2 * Py1y2));  // 6
   likelihood(2, 1) = point_occupied_ * (1 - abs(Px2x3 * Py1y2));  // 7
   likelihood(2, 2) = point_occupied_ * (1 - abs(Px3x4 * Py1y2));  // 8
-
-  // likelihood(0, 0) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(res,2) / (2*std_dev(0)*std_dev(0)))) *
-  //                    (1/(2*M_PI*std_dev(1)) * exp(-pow(res,2) / (2*std_dev(1)*std_dev(1))))
-  //                    ));
-  // likelihood(0,2) = likelihood(0,0);
-  // likelihood(2,0) = likelihood(0,0);
-  // likelihood(2,2) = likelihood(0,0);
-  // likelihood(1,0) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(0,2) / (2*std_dev(0)*std_dev(0)))) *
-  //                    (1/(2*M_PI*std_dev(1)) * exp(-pow(res,2) / (2*std_dev(1)*std_dev(1))))
-  //                    ));
-  // likelihood(1,2) = likelihood(1,0);
-  // likelihood(0,1) = (abs((1/(2*M_PI*std_dev(0)) * exp(-pow(res,2) / (2*std_dev(0)*std_dev(0)))) *
-  //                    (1/(2*M_PI*std_dev(1)) * exp(-pow(0,2) / (2*std_dev(1)*std_dev(1))))
-  //                    ));
-  // likelihood(2,1) = likelihood(0,1);
-  // likelihood(1,1) = point_occupied_;
 }
 
 

@@ -1,0 +1,100 @@
+<launch>
+      <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot/maze/2020-08-04-11-21-37.bag"/>
+      <!-- <arg name="BagFile"           default="$(find ramon_simulation)/bagfiles/rosbot/turtlebot3_world/2020-08-07-12-05-25.bag"/> -->
+
+	<arg name="bag_play"	      default="true"/>    
+	<arg name="use_rviz"	      default="true"/>
+	<arg name="use_tf"	        default="true"/>
+	<!-- <arg name="bag_rate"	      default="0.01"/> -->
+	<arg name="bag_rate"	      default="1.0"/>
+	<arg name="std_dev"	        default="0.01"/>
+	<!-- <arg name="std_dev"	      default="0.05"/> -->
+
+  <param if="$(arg bag_play)" name="/use_sim_time" value="true"/>
+
+  <node if="$(arg bag_play)" pkg="rosbag" type="play" name="rosbag_play_robot"
+      args="--clock --rate=$(arg bag_rate) $(arg BagFile)"
+  />
+
+  <param name="robot_description" command="$(find xacro)/xacro '$(find ramon_simulation)/urdf/rosbot/rosbot.xacro'"/>
+
+<!-- TFs -->
+  <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="robot_path_broadcaster"
+        args="0 0 0 0 0 0 1 world robot_path2d 100" />        
+
+  <!-- <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="robot_odom_broadcaster"
+        args="0 0 0 0 0 0 1 map robot_odom2d 100" />         -->
+
+  <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="world_broadcaster"
+        args="0 0 0 0 0 0 1 world map 100" />
+
+  <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="map2_broadcaster"
+        args="0 0 0 0 0 0 1 map odom 100" />
+
+  <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="world2_broadcaster"
+        args="0 0 0 0 0 0 1 map odom2d 100" />
+        
+  <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="real_odom_broadcaster"
+        args="-0.005 0.025 0 0 0 -0.7071068 0.7071068 world real_path 100" />
+
+  <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="imu_link_broadcaster"
+        args="0 0 0 0 0 0 1 base_link imu_link 10" />
+
+  <!-- <node if="$(arg use_tf)" 
+        pkg="tf"
+        type="static_transform_publisher"
+        name="map2_broadcaster"
+        args="0 0 0 0 0 0 1 map odom 100" /> -->
+
+  <!-- Delay -->
+  <arg name="node_start_delay" default="2.0" />
+
+  <node name="ramon_slam2d"	
+        pkg="ramon_slam2d"  
+        type="slam2d" 
+        output="screen"
+        clear_params="true">
+      <!-- <param name="scan_topic_name" type="string" value="/f_scan"/> -->
+      <!-- <param name="imu_topic_name" type="string" value="/imu_data"/> -->
+      <!-- <param name="base_frame" type="string" value="/base_footprint"/> -->
+      <param name="imu_topic_name" type="string" value="/imu"/>
+      <param name="ground_truth_topic_name" value="/ground_truth/state"/>
+      <param name="extodometry_topic_name" value="/odometry/filtered"/>
+      <param name="map_count" value="4"/>
+      <param name="std_dev" value="$(arg std_dev)"/>
+  </node>
+
+<!-- RVIZ visualisation -->
+<node if="$(arg use_rviz)" 
+        name="rviz_OG" 
+        pkg="rviz" 
+        type="rviz" 
+      args="-d $(find ramon_slam2d)/rviz/lidar_map_occupancygrid.rviz" />
+
+   <node pkg="robot_localization" type="ekf_localization_node" name="ekf_odom_node" output="screen" >
+    <rosparam command="load" file="$(find ramon_slam2d)/config/ekf_localization.yaml"/>
+    <!-- <remap from="odometry/filtered" to="odom/ekf/enc_imu"/> -->
+   </node>
+
+</launch>

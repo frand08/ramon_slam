@@ -27,17 +27,17 @@
 struct mag_cal_functor
 {
 	// 'm' pairs of (x, f(x))
-	Eigen::MatrixXf gyro_values;
-	Eigen::MatrixXf mag_values;
-	Eigen::Vector4f q_init;
-	Eigen::Vector3f b_g;
-    float dt_factor, dt;
-    float c1, c2, c3, c4;
-    float a21, a31, a41, a32, a42, a43;
-	Eigen::Vector3f gyro_measnoise;
+	Eigen::MatrixXd gyro_values;
+	Eigen::MatrixXd mag_values;
+	Eigen::Vector4d q_init;
+	Eigen::Vector3d b_g;
+    double dt_factor, dt;
+    double c1, c2, c3, c4;
+    double a21, a31, a41, a32, a42, a43;
+	Eigen::Vector3d gyro_measnoise;
 
 	// Compute 'm' errors, one for each data point, for the given parameter values in 'x'
-	int operator()(const Eigen::VectorXf &x, Eigen::VectorXf &fvec) const
+	int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const
 	{
 		// 'x' has dimensions n x 1
 		// It contains the current estimates for the parameters.
@@ -45,23 +45,23 @@ struct mag_cal_functor
 		// 'fvec' has dimensions m x 1
 		// It will contain the error for each data point.
 
-        Eigen::Vector4f qk, qk_1, q1, q2, q3, q4, k1, k2, k3, k4;
-		Eigen::Quaternionf quat;
-        Eigen::Vector3f m_n;
-        Eigen::Vector3f mk_b;
-        Eigen::Matrix3f D;
-        Eigen::Vector3f o;
+        Eigen::Vector4d qk, qk_1, q1, q2, q3, q4, k1, k2, k3, k4;
+		Eigen::Quaterniond quat;
+        Eigen::Vector3d m_n;
+        Eigen::Vector3d mk_b;
+        Eigen::Matrix3d D;
+        Eigen::Vector3d o;
 
-        Eigen::Vector3f e_mt;
+        Eigen::Vector3d e_mt;
 
-        float dip_angle = x(0);
+        double dip_angle = x(0);
 
-        Eigen::Vector3f xValue;             // w_s
+        Eigen::Vector3d xValue;             // w_s
 
-        float yValue;
+        double yValue;
 
-        Eigen::Vector3f w_o;
-        Eigen::Matrix4f omega;
+        Eigen::Vector3d w_o;
+        Eigen::Matrix4d omega;
 
         yValue = 0;
 
@@ -174,7 +174,7 @@ struct mag_cal_functor
 	}
 
 	// Compute the jacobian of the errors
-	int df(const Eigen::VectorXf &x, Eigen::MatrixXf &fjac) const
+	int df(const Eigen::VectorXd &x, Eigen::MatrixXd &fjac) const
 	{
 		// 'x' has dimensions n x 1
 		// It contains the current estimates for the parameters.
@@ -182,22 +182,22 @@ struct mag_cal_functor
 		// 'fjac' has dimensions m x n
 		// It will contain the jacobian of the errors, calculated numerically in this case.
 
-		float epsilon;
+		double epsilon;
 		epsilon = 1e-5f;
 
 		for (int i = 0; i < x.size(); i++) {
-			Eigen::VectorXf xPlus(x);
+			Eigen::VectorXd xPlus(x);
 			xPlus(i) += epsilon;
-			Eigen::VectorXf xMinus(x);
+			Eigen::VectorXd xMinus(x);
 			xMinus(i) -= epsilon;
 
-			Eigen::VectorXf fvecPlus(values());
+			Eigen::VectorXd fvecPlus(values());
 			operator()(xPlus, fvecPlus);
 
-			Eigen::VectorXf fvecMinus(values());
+			Eigen::VectorXd fvecMinus(values());
 			operator()(xMinus, fvecMinus);
 
-			Eigen::VectorXf fvecDiff(values());
+			Eigen::VectorXd fvecDiff(values());
 			fvecDiff = (fvecPlus - fvecMinus) / (2.0f * epsilon);
 
 			fjac.block(0, i, values(), 1) = fvecDiff;
@@ -230,10 +230,10 @@ struct mag_cal_functor
 struct mag_cal_ellipsoid_fitting_functor
 {
 	// 'm' pairs of (x, f(x))
-	Eigen::MatrixXf mag_values;
+	Eigen::MatrixXd mag_values;
 
 	// Compute 'm' errors, one for each data point, for the given parameter values in 'x'
-	int operator()(const Eigen::VectorXf &x, Eigen::VectorXf &fvec) const
+	int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const
 	{
 		// 'x' has dimensions n x 1
 		// It contains the current estimates for the parameters.
@@ -241,13 +241,13 @@ struct mag_cal_ellipsoid_fitting_functor
 		// 'fvec' has dimensions m x 1
 		// It will contain the error for each data point.
 
-		Eigen::Matrix3f A;
-		Eigen::VectorXf M;
-		Eigen::VectorXf epsilon; 
-		float a_11, a_12, a_13, a_22, a_23, a_33;
-		Eigen::Vector3f b;
-		float b_1, b_2, b_3;
-		float c;
+		Eigen::Matrix3d A;
+		Eigen::VectorXd M;
+		Eigen::VectorXd epsilon; 
+		double a_11, a_12, a_13, a_22, a_23, a_33;
+		Eigen::Vector3d b;
+		double b_1, b_2, b_3;
+		double c;
 		
 		a_11 = x(0);
 		a_12 = x(1);
@@ -278,10 +278,10 @@ struct mag_cal_ellipsoid_fitting_functor
 				   b_3,
 				   c;
 		
-        Eigen::Vector3f xValue;
+        Eigen::Vector3d xValue;
 
-        float yValue;
-		float aux1, aux2;
+        double yValue;
+		double aux1, aux2;
 
         yValue = 0;
 
@@ -303,7 +303,7 @@ struct mag_cal_ellipsoid_fitting_functor
 	}
 
 	// Compute the jacobian of the errors
-	int df(const Eigen::VectorXf &x, Eigen::MatrixXf &fjac) const
+	int df(const Eigen::VectorXd &x, Eigen::MatrixXd &fjac) const
 	{
 		// 'x' has dimensions n x 1
 		// It contains the current estimates for the parameters.
@@ -311,22 +311,22 @@ struct mag_cal_ellipsoid_fitting_functor
 		// 'fjac' has dimensions m x n
 		// It will contain the jacobian of the errors, calculated numerically in this case.
 
-		float epsilon;
+		double epsilon;
 		epsilon = 1e-5f;
 
 		for (int i = 0; i < x.size(); i++) {
-			Eigen::VectorXf xPlus(x);
+			Eigen::VectorXd xPlus(x);
 			xPlus(i) += epsilon;
-			Eigen::VectorXf xMinus(x);
+			Eigen::VectorXd xMinus(x);
 			xMinus(i) -= epsilon;
 
-			Eigen::VectorXf fvecPlus(values());
+			Eigen::VectorXd fvecPlus(values());
 			operator()(xPlus, fvecPlus);
 
-			Eigen::VectorXf fvecMinus(values());
+			Eigen::VectorXd fvecMinus(values());
 			operator()(xMinus, fvecMinus);
 
-			Eigen::VectorXf fvecDiff(values());
+			Eigen::VectorXd fvecDiff(values());
 			fvecDiff = (fvecPlus - fvecMinus) / (2.0f * epsilon);
 
 			fjac.block(0, i, values(), 1) = fvecDiff;
@@ -354,10 +354,10 @@ struct mag_cal_ellipsoid_fitting_functor
 struct mag_cal_misalignment_functor
 {
 	// 'm' pairs of (x, f(x))
-	Eigen::MatrixXf mag_values;
+	Eigen::MatrixXd mag_values;
 
 	// Compute 'm' errors, one for each data point, for the given parameter values in 'x'
-	int operator()(const Eigen::VectorXf &x, Eigen::VectorXf &fvec) const
+	int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const
 	{
 		// 'x' has dimensions n x 1
 		// It contains the current estimates for the parameters.
@@ -365,12 +365,12 @@ struct mag_cal_misalignment_functor
 		// 'fvec' has dimensions m x 1
 		// It will contain the error for each data point.
 
-		Eigen::VectorXf M;
-		Eigen::Matrix3f A;
-		float a_11, a_12, a_13, a_21, a_22, a_23, a_31, a_32, a_33;
-		Eigen::Vector3f b;
-		float b_1, b_2, b_3;
-		float c;
+		Eigen::VectorXd M;
+		Eigen::Matrix3d A;
+		double a_11, a_12, a_13, a_21, a_22, a_23, a_31, a_32, a_33;
+		Eigen::Vector3d b;
+		double b_1, b_2, b_3;
+		double c;
 		
 		a_11 = x(0);
 		a_12 = x(1);
@@ -390,11 +390,11 @@ struct mag_cal_misalignment_functor
 			 a_21, a_22, a_23,
 			 a_31, a_32, a_33;
 
-        Eigen::Vector3f xValue;
+        Eigen::Vector3d xValue;
 
-        float yValue;
-		float aux1, aux2;
-		Eigen::VectorXf aux3;
+        double yValue;
+		double aux1, aux2;
+		Eigen::VectorXd aux3;
 
         yValue = 0;
 
@@ -416,7 +416,7 @@ struct mag_cal_misalignment_functor
 	}
 
 	// Compute the jacobian of the errors
-	int df(const Eigen::VectorXf &x, Eigen::MatrixXf &fjac) const
+	int df(const Eigen::VectorXd &x, Eigen::MatrixXd &fjac) const
 	{
 		// 'x' has dimensions n x 1
 		// It contains the current estimates for the parameters.
@@ -424,22 +424,22 @@ struct mag_cal_misalignment_functor
 		// 'fjac' has dimensions m x n
 		// It will contain the jacobian of the errors, calculated numerically in this case.
 
-		float epsilon;
+		double epsilon;
 		epsilon = 1e-5f;
 
 		for (int i = 0; i < x.size(); i++) {
-			Eigen::VectorXf xPlus(x);
+			Eigen::VectorXd xPlus(x);
 			xPlus(i) += epsilon;
-			Eigen::VectorXf xMinus(x);
+			Eigen::VectorXd xMinus(x);
 			xMinus(i) -= epsilon;
 
-			Eigen::VectorXf fvecPlus(values());
+			Eigen::VectorXd fvecPlus(values());
 			operator()(xPlus, fvecPlus);
 
-			Eigen::VectorXf fvecMinus(values());
+			Eigen::VectorXd fvecMinus(values());
 			operator()(xMinus, fvecMinus);
 
-			Eigen::VectorXf fvecDiff(values());
+			Eigen::VectorXd fvecDiff(values());
 			fvecDiff = (fvecPlus - fvecMinus) / (2.0f * epsilon);
 
 			fjac.block(0, i, values(), 1) = fvecDiff;
@@ -462,4 +462,4 @@ struct mag_cal_misalignment_functor
 
 };
 
-int mag_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, Eigen::MatrixXf mag_values, Eigen::VectorXf &output_values);
+int mag_calibration(Eigen::MatrixXd accel_values, Eigen::MatrixXd gyro_values, Eigen::MatrixXd mag_values, Eigen::VectorXd &output_values);

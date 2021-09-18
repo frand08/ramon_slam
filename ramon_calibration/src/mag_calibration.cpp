@@ -11,30 +11,30 @@
 
 #include "mag_calibration.h"
 
-int mag_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, Eigen::MatrixXf mag_values, Eigen::VectorXf &output_values)
+int mag_calibration(Eigen::MatrixXd accel_values, Eigen::MatrixXd gyro_values, Eigen::MatrixXd mag_values, Eigen::VectorXd &output_values)
 {
     mag_cal_misalignment_functor misalignment_functor;
     int n_misalignment = 10;        // Number of variables in the misalignment init
     int m_misalignment;
-    Eigen::VectorXf x_misalignment(n_misalignment);
+    Eigen::VectorXd x_misalignment(n_misalignment);
 
     mag_cal_functor functor;
     int n = 9;                      // Number of variables
     int m;
-    Eigen::VectorXf x(n);           // Values to get by LM algorithm
+    Eigen::VectorXd x(n);           // Values to get by LM algorithm
 
-    Eigen::MatrixXf M;
-    Eigen::VectorXf zeros;
-    Eigen::VectorXf epsilon;
-    Eigen::Matrix3f A, aux;
-    float a_11, a_12, a_13, a_21, a_22, a_23, a_31, a_32, a_33;
-    Eigen::Vector3f b;
-    float b_1, b_2, b_3;
-    float c;
+    Eigen::MatrixXd M;
+    Eigen::VectorXd zeros;
+    Eigen::VectorXd epsilon;
+    Eigen::Matrix3d A, aux;
+    double a_11, a_12, a_13, a_21, a_22, a_23, a_31, a_32, a_33;
+    Eigen::Vector3d b;
+    double b_1, b_2, b_3;
+    double c;
 
-    float alpha;
-    Eigen::Matrix3f Dh_0, Ds_0;
-    Eigen::Vector3f oh_0;
+    double alpha;
+    Eigen::Matrix3d Dh_0, Ds_0;
+    Eigen::Vector3d oh_0;
 
     // a_11 = 0.33;
     // a_12 = 0.01;
@@ -83,7 +83,7 @@ int mag_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, E
     misalignment_functor.m = m_misalignment;
     misalignment_functor.n = n_misalignment;
 
-    Eigen::LevenbergMarquardt<mag_cal_misalignment_functor, float> lm_misalignment(misalignment_functor);
+    Eigen::LevenbergMarquardt<mag_cal_misalignment_functor, double> lm_misalignment(misalignment_functor);
     lm_misalignment.minimize(x_misalignment);
 
     A << x_misalignment(0), x_misalignment(1), x_misalignment(2),
@@ -111,7 +111,7 @@ int mag_calibration(Eigen::MatrixXf accel_values, Eigen::MatrixXf gyro_values, E
      return 0;
 }
 
-int mag_calibration_init(Eigen::MatrixXf mag_values, Eigen::VectorXf &output_values)
+int mag_calibration_init(Eigen::MatrixXd mag_values, Eigen::VectorXd &output_values)
 {
      return 0;
 }

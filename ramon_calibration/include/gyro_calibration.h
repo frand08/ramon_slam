@@ -24,37 +24,37 @@ namespace ramon_calibration
 	{
 		public:
 			GyroCalibration();
-			GyroCalibration(Eigen::Vector3f noise);
-			GyroCalibration(Eigen::Matrix3f T_init, Eigen::Matrix3f K_init);
-			GyroCalibration(Eigen::Matrix3f T_init, Eigen::Matrix3f K_init, Eigen::Vector3f noise);
+			GyroCalibration(Eigen::Vector3d noise);
+			GyroCalibration(Eigen::Matrix3d T_init, Eigen::Matrix3d K_init);
+			GyroCalibration(Eigen::Matrix3d T_init, Eigen::Matrix3d K_init, Eigen::Vector3d noise);
 			~GyroCalibration();
-			Eigen::LevenbergMarquardtSpace::Status calibrate(const Eigen::Ref<const Eigen::MatrixX3f> accel_values, const Eigen::Ref<const Eigen::MatrixX3f> gyro_values, const Eigen::Ref<const Eigen::MatrixX2i> static_times, int tinit_values, float dt);
-			int correctValues(const Eigen::Ref<const Eigen::MatrixXf> gyro_values, Eigen::Ref<Eigen::MatrixXf> gyro_values_corr);
-			int getBias(Eigen::Ref<Eigen::Vector3f> b);
-			int getParams(Eigen::Ref<Eigen::Matrix3f> T, Eigen::Ref<Eigen::Matrix3f> K, Eigen::Ref<Eigen::Vector3f> b);
-			int getT(Eigen::Ref<Eigen::Matrix3f> T);
-			int getK(Eigen::Ref<Eigen::Matrix3f> K);
+			Eigen::LevenbergMarquardtSpace::Status calibrate(const Eigen::Ref<const Eigen::MatrixX3d> accel_values, const Eigen::Ref<const Eigen::MatrixX3d> gyro_values, const Eigen::Ref<const Eigen::MatrixX2i> static_times, int tinit_values, double dt);
+			int correctValues(const Eigen::Ref<const Eigen::MatrixXd> gyro_values, Eigen::Ref<Eigen::MatrixXd> gyro_values_corr);
+			int getBias(Eigen::Ref<Eigen::Vector3d> b);
+			int getParams(Eigen::Ref<Eigen::Matrix3d> T, Eigen::Ref<Eigen::Matrix3d> K, Eigen::Ref<Eigen::Vector3d> b);
+			int getT(Eigen::Ref<Eigen::Matrix3d> T);
+			int getK(Eigen::Ref<Eigen::Matrix3d> K);
 			
 			int printCalibratedValues(void);
-			void setInitalValues(Eigen::Matrix3f T_init, Eigen::Matrix3f K_init);
-			void setNoise(Eigen::Vector3f noise);
+			void setInitalValues(Eigen::Matrix3d T_init, Eigen::Matrix3d K_init);
+			void setNoise(Eigen::Vector3d noise);
 			int start(int tinit_values);
 		private:
 			int n_;
 			int m_;
 			bool calibrated_;
 			
-			Eigen::Matrix3f T_;
-			float gamma_yz_, gamma_zy_, gamma_zx_, gamma_xz_, gamma_xy_, gamma_yx_;
+			Eigen::Matrix3d T_;
+			double gamma_yz_, gamma_zy_, gamma_zx_, gamma_xz_, gamma_xy_, gamma_yx_;
 
-			Eigen::Matrix3f K_;
-			float s_x_, s_y_, s_z_;
+			Eigen::Matrix3d K_;
+			double s_x_, s_y_, s_z_;
 
-			Eigen::Vector3f b_;
+			Eigen::Vector3d b_;
 
 			bool use_noise_;
-			Eigen::Vector3f noise_;
-			float noise_x_, noise_y_, noise_z_;
+			Eigen::Vector3d noise_;
+			double noise_x_, noise_y_, noise_z_;
 	};
 };
 

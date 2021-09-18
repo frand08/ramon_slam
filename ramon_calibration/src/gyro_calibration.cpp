@@ -23,9 +23,9 @@ using namespace ramon_calibration;
  */
 GyroCalibration::GyroCalibration()
 {
-    Eigen::Matrix3f T_init;
-    Eigen::Matrix3f K_init;
-    Eigen::Vector3f noise;
+    Eigen::Matrix3d T_init;
+    Eigen::Matrix3d K_init;
+    Eigen::Vector3d noise;
 
     // axis missalignments (init values)
     T_init <<   1  , -0.01,  0.01,
@@ -58,10 +58,10 @@ GyroCalibration::GyroCalibration()
  * @return
  *  none.
  */
-GyroCalibration::GyroCalibration(Eigen::Vector3f noise)
+GyroCalibration::GyroCalibration(Eigen::Vector3d noise)
 {
-    Eigen::Matrix3f T_init;
-    Eigen::Matrix3f K_init;
+    Eigen::Matrix3d T_init;
+    Eigen::Matrix3d K_init;
 
     // axis missalignments (init values)
     T_init <<   1  , -0.01,  0.01,
@@ -93,9 +93,9 @@ GyroCalibration::GyroCalibration(Eigen::Vector3f noise)
  * @return
  *  none.
  */
-GyroCalibration::GyroCalibration(Eigen::Matrix3f T_init, Eigen::Matrix3f K_init)
+GyroCalibration::GyroCalibration(Eigen::Matrix3d T_init, Eigen::Matrix3d K_init)
 {
-    Eigen::Vector3f noise;
+    Eigen::Vector3d noise;
 
     // Set initial values
     this->setInitalValues(T_init, K_init);
@@ -121,7 +121,7 @@ GyroCalibration::GyroCalibration(Eigen::Matrix3f T_init, Eigen::Matrix3f K_init)
  * @return
  *  none.
  */
-GyroCalibration::GyroCalibration(Eigen::Matrix3f T_init, Eigen::Matrix3f K_init, Eigen::Vector3f noise)
+GyroCalibration::GyroCalibration(Eigen::Matrix3d T_init, Eigen::Matrix3d K_init, Eigen::Vector3d noise)
 {
     // Set initial values
     this->setInitalValues(T_init, K_init);
@@ -158,14 +158,14 @@ GyroCalibration::~GyroCalibration()
  * @return
  *  Eigen::LevenbergMarquardtSpace::Status - Status of minimization process
  */
-Eigen::LevenbergMarquardtSpace::Status GyroCalibration::calibrate(const Eigen::Ref<const Eigen::MatrixX3f> accel_values, 
-                                                                  const Eigen::Ref<const Eigen::MatrixX3f> gyro_values, 
+Eigen::LevenbergMarquardtSpace::Status GyroCalibration::calibrate(const Eigen::Ref<const Eigen::MatrixX3d> accel_values, 
+                                                                  const Eigen::Ref<const Eigen::MatrixX3d> gyro_values, 
                                                                   const Eigen::Ref<const Eigen::MatrixX2i> static_times,  
-                                                                  int tinit_samples, float dt)
+                                                                  int tinit_samples, double dt)
 {
-    Eigen::VectorXf x(n_);   // Values to get by LM algorithm
-    float dt_factor = 2.0;
-    Eigen::Vector4f q_init;
+    Eigen::VectorXd x(n_);   // Values to get by LM algorithm
+    double dt_factor = 2.0;
+    Eigen::Vector4d q_init;
     q_init << 1,
               0,
               0,
@@ -177,7 +177,7 @@ Eigen::LevenbergMarquardtSpace::Status GyroCalibration::calibrate(const Eigen::R
     gyro_cal_functor functor(accel_values, gyro_values, static_times, dt, dt_factor, accel_values.rows(), n_, b_, noise_, q_init);
     Eigen::LevenbergMarquardtSpace::Status ret;
     Eigen::NumericalDiff<gyro_cal_functor> numDiff(functor);
-    Eigen::LevenbergMarquardt<Eigen::NumericalDiff<gyro_cal_functor>, float> lm(numDiff);
+    Eigen::LevenbergMarquardt<Eigen::NumericalDiff<gyro_cal_functor>, double> lm(numDiff);
 
     // lm.parameters.maxfev = 100;
     // lm.parameters.xtol = 1.0e-5;
@@ -218,7 +218,7 @@ Eigen::LevenbergMarquardtSpace::Status GyroCalibration::calibrate(const Eigen::R
  * @return
  *  int - if the Gyroscope was previously calibrated, returns 0, otherwise, -1
  */
-int GyroCalibration::getBias(Eigen::Ref<Eigen::Vector3f> b)
+int GyroCalibration::getBias(Eigen::Ref<Eigen::Vector3d> b)
 {
     int out;
     if(calibrated_)
@@ -243,7 +243,7 @@ int GyroCalibration::getBias(Eigen::Ref<Eigen::Vector3f> b)
  * @return
  *  int - if the Gyroscope was previously calibrated, returns 0, otherwise, -1
  */
-int GyroCalibration::getParams(Eigen::Ref<Eigen::Matrix3f> T, Eigen::Ref<Eigen::Matrix3f> K, Eigen::Ref<Eigen::Vector3f> b)
+int GyroCalibration::getParams(Eigen::Ref<Eigen::Matrix3d> T, Eigen::Ref<Eigen::Matrix3d> K, Eigen::Ref<Eigen::Vector3d> b)
 {
     int ret = -1;
     if(calibrated_)
@@ -264,7 +264,7 @@ int GyroCalibration::getParams(Eigen::Ref<Eigen::Matrix3f> T, Eigen::Ref<Eigen::
  * @return
  *  int - if the Gyroscope was previously calibrated, returns 0, otherwise, -1
  */
-int GyroCalibration::getK(Eigen::Ref<Eigen::Matrix3f> K)
+int GyroCalibration::getK(Eigen::Ref<Eigen::Matrix3d> K)
 {
     int out;
     if(calibrated_)
@@ -287,7 +287,7 @@ int GyroCalibration::getK(Eigen::Ref<Eigen::Matrix3f> K)
  * @return
  *  int - if the Gyroscope was previously calibrated, returns 0, otherwise, -1
  */
-int GyroCalibration::getT(Eigen::Ref<Eigen::Matrix3f> T)
+int GyroCalibration::getT(Eigen::Ref<Eigen::Matrix3d> T)
 {
     int out;
     if(calibrated_)
@@ -334,7 +334,7 @@ int GyroCalibration::printCalibratedValues(void)
  * @return
  *  none.
  */
-void GyroCalibration::setInitalValues(Eigen::Matrix3f T_init, Eigen::Matrix3f K_init)
+void GyroCalibration::setInitalValues(Eigen::Matrix3d T_init, Eigen::Matrix3d K_init)
 {
     // axis missalignments (init values)
     gamma_yz_ = -T_init(0,1);
@@ -359,7 +359,7 @@ void GyroCalibration::setInitalValues(Eigen::Matrix3f T_init, Eigen::Matrix3f K_
  * @return
  *  none.
  */
-void GyroCalibration::setNoise(Eigen::Vector3f noise)
+void GyroCalibration::setNoise(Eigen::Vector3d noise)
 {
     noise_ = noise;
     if(noise.norm() == 0.0)
@@ -377,7 +377,7 @@ void GyroCalibration::setNoise(Eigen::Vector3f noise)
  * @return
  *  int - if the Gyroscope was previously calibrated, returns 0, otherwise, -1
  */
-int GyroCalibration::correctValues(const Eigen::Ref<const Eigen::MatrixXf> accel_values, Eigen::Ref<Eigen::MatrixXf> accel_values_corr)
+int GyroCalibration::correctValues(const Eigen::Ref<const Eigen::MatrixXd> accel_values, Eigen::Ref<Eigen::MatrixXd> accel_values_corr)
 {
     int i, ret = -1;
     if(calibrated_)

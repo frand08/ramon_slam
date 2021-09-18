@@ -16,22 +16,22 @@
 #include <iostream>
 
 
-struct gyro_cal_functor: Functor<float>
+struct gyro_cal_functor: Functor<double>
 {
-	Eigen::MatrixX3f gyro_values;
-	Eigen::MatrixX3f accel_values;
-	Eigen::Vector4f q_init;
-	Eigen::Vector3f bias;
-    float dt_factor, dt;
-	Eigen::Vector3f measnoise;
+	Eigen::MatrixX3d gyro_values;
+	Eigen::MatrixX3d accel_values;
+	Eigen::Vector4d q_init;
+	Eigen::Vector3d bias;
+    double dt_factor, dt;
+	Eigen::Vector3d measnoise;
 	Eigen::MatrixX2i static_intervals;
 
-	gyro_cal_functor(const Eigen::Ref<const Eigen::MatrixX3f> accel, 
-					 const Eigen::Ref<const Eigen::MatrixX3f> gyro,
+	gyro_cal_functor(const Eigen::Ref<const Eigen::MatrixX3d> accel, 
+					 const Eigen::Ref<const Eigen::MatrixX3d> gyro,
 					 const Eigen::Ref<const Eigen::MatrixX2i> intervals, 
-					 float dt, float dt_factor, int val, int in,
-					 Eigen::Vector3f b, Eigen::Vector3f noise,
-					 Eigen::Vector4f q): 
+					 double dt, double dt_factor, int val, int in,
+					 Eigen::Vector3d b, Eigen::Vector3d noise,
+					 Eigen::Vector4d q): 
 					 accel_values(accel),
 					 gyro_values(gyro),
 					 static_intervals(intervals),
@@ -39,11 +39,11 @@ struct gyro_cal_functor: Functor<float>
 					 dt_factor(dt_factor),
 					 bias(b), measnoise(noise),
 					 q_init(q),
-					//  Functor<float>(in, val*3) {}
-					 Functor<float>(in, intervals.rows()) {}
+					//  Functor<double>(in, val*3) {}
+					 Functor<double>(in, intervals.rows()) {}
 
 	// Compute 'm' errors, one for each data point, for the given parameter values in 'x'
-	int operator()(const Eigen::VectorXf &x, Eigen::VectorXf &fvec) const
+	int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const
 	{
 		// 'x' has dimensions n x 1
 		// It contains the current estimates for the parameters.
@@ -51,31 +51,31 @@ struct gyro_cal_functor: Functor<float>
 		// 'fvec' has dimensions m x 1
 		// It will contain the error for each data point.
 		static int iterations = 1;
-        Eigen::Vector4f qk_reg, qk_next, q1, q2, q3, q4, k1, k2, k3, k4;
-		Eigen::Quaternionf quat;
-		Eigen::Vector3f gravity_versor, ug_k_1;
-        Eigen::Matrix3f T_g;
-        Eigen::Matrix3f K_g;
+        Eigen::Vector4d qk_reg, qk_next, q1, q2, q3, q4, k1, k2, k3, k4;
+		Eigen::Quaterniond quat;
+		Eigen::Vector3d gravity_versor, ug_k_1;
+        Eigen::Matrix3d T_g;
+        Eigen::Matrix3d K_g;
 		
-		float c1, c2, c3, c4;
-		float a21, a31, a41, a32, a42, a43;
+		double c1, c2, c3, c4;
+		double a21, a31, a41, a32, a42, a43;
 
-        float g_yz = x(0);
-        float g_zy = x(1);
-        float g_zx = x(2);
-        float g_xz = x(3);
-        float g_xy = x(4);
-        float g_yx = x(5);        
-        float sg_x = x(6);
-        float sg_y = x(7);
-        float sg_z = x(8);
+        double g_yz = x(0);
+        double g_zy = x(1);
+        double g_zx = x(2);
+        double g_xz = x(3);
+        double g_xy = x(4);
+        double g_yx = x(5);        
+        double sg_x = x(6);
+        double sg_y = x(7);
+        double sg_z = x(8);
 
-        Eigen::Vector3f xValue;             // w_s
+        Eigen::Vector3d xValue;             // w_s
 
-		Eigen::Vector3f aux, aux2;
+		Eigen::Vector3d aux, aux2;
 
-        Eigen::Vector3f w_o;
-        Eigen::Matrix4f omega;
+        Eigen::Vector3d w_o;
+        Eigen::Matrix4d omega;
 
         T_g <<   1  , -g_yz,  g_zy,
                 g_xz,   1  , -g_zx,

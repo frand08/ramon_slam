@@ -15,17 +15,17 @@
 #include "generic_functor.h"
 #include <iostream>
 
-struct accel_cal_functor: Functor<float>
+struct accel_cal_functor: Functor<double>
 {
-	Eigen::MatrixXf accel_values;
+	Eigen::MatrixXd accel_values;
 
-	accel_cal_functor(const Eigen::Ref<const Eigen::MatrixXf> accel, 
+	accel_cal_functor(const Eigen::Ref<const Eigen::MatrixXd> accel, 
 					 int val, int in): 
 					 accel_values(accel),
-					 Functor<float>(in, val) {}
+					 Functor<double>(in, val) {}
 
 	// Compute 'm' errors, one for each data point, for the given parameter values in 'x'
-	int operator()(const Eigen::VectorXf &x, Eigen::VectorXf &fvec) const
+	int operator()(const Eigen::VectorXd &x, Eigen::VectorXd &fvec) const
 	{
 		// 'x' has dimensions n x 1
 		// It contains the current estimates for the parameters.
@@ -34,24 +34,24 @@ struct accel_cal_functor: Functor<float>
 		// It will contain the error for each data point.
 
 		static int iterations = 1;
-        Eigen::Matrix3f T;
-        Eigen::Matrix3f K;
-        Eigen::Vector3f b;
+        Eigen::Matrix3d T;
+        Eigen::Matrix3d K;
+        Eigen::Vector3d b;
 
-		Eigen::Vector3f a_o;
+		Eigen::Vector3d a_o;
 
-		Eigen::Vector3f xValue;              	// a_s
-		float yValue = 0;                       // ||g||^2		
+		Eigen::Vector3d xValue;              	// a_s
+		double yValue = 0;                       // ||g||^2		
 
-        float a_yz = x(0);
-        float a_zy = x(1);
-        float a_zx = x(2);
-        float s_x = x(3);
-        float s_y = x(4);
-        float s_z = x(5);
-        float b_x = x(6);
-        float b_y = x(7);
-        float b_z = x(8);
+        double a_yz = x(0);
+        double a_zy = x(1);
+        double a_zx = x(2);
+        double s_x = x(3);
+        double s_y = x(4);
+        double s_z = x(5);
+        double b_x = x(6);
+        double b_y = x(7);
+        double b_z = x(8);
 
         T << 1, -a_yz,  a_zy,
              0,   1  , -a_zx,
@@ -80,7 +80,7 @@ struct accel_cal_functor: Functor<float>
                       accel_values(i, 2);         	// a_z
 
 
-            Eigen::Vector3f a_o = T * K * (xValue + b);
+            Eigen::Vector3d a_o = T * K * (xValue + b);
 
 			/* FIXME: CREO QUE ESTA MAL CALCULADO!! NO DEBERIA PONER SOLO LO QUE NO VA COMO NORMA? */
             fvec(i) = 1 - a_o.squaredNorm();

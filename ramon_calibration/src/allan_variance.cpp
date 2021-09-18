@@ -1,14 +1,14 @@
 #include "allan_variance.h"
 
-int allan_variance(Eigen::MatrixXf gyro_values, Eigen::MatrixXf &allan_var)
+int allan_variance(Eigen::MatrixXd gyro_values, Eigen::MatrixXd &allan_var)
 {
-    Eigen::MatrixXf gyro_proms;
-    Eigen::Vector3f gyro_aux, temp;
+    Eigen::MatrixXd gyro_proms;
+    Eigen::Vector3d gyro_aux, temp;
     int m, k, l;
     int s;
     int i, j, N;
     N = gyro_values.rows();
-    Eigen::MatrixXf A(N,3),B(N,3);
+    Eigen::MatrixXd A(N,3),B(N,3);
 
     for(k=1; k <= N/2; k++)                         // k=N/2 means minimum of 2 subgroups
     {

@@ -20,13 +20,13 @@ int main (int argc, char** argv)
 {
     ros::init (argc, argv, "gyro_variance");  
     rosbag::Bag bag;
-	Eigen::MatrixXf gyro_values, gyro_allan_variance;
+	Eigen::MatrixXd gyro_values, gyro_allan_variance;
 
     ros::NodeHandle nh("~");
 
     std::string bag_file;
     std::string topic_name;
-    float data_rate;
+    double data_rate;
 
     if(!nh.getParam("bag_file", bag_file))
     {
@@ -75,24 +75,24 @@ int main (int argc, char** argv)
     ROS_INFO("Done.");
     ROS_INFO("Allan Variance results:");
     // Plot the outputs
-    Eigen::VectorXf v1 = gyro_allan_variance.col(0);
-    std::vector<float> v2, t(gyro_allan_variance.rows());
+    Eigen::VectorXd v1 = gyro_allan_variance.col(0);
+    std::vector<double> v2, t(gyro_allan_variance.rows());
     std::iota(t.begin(), t.end(), 0);
 
     std::transform(t.begin(), t.end(), t.begin(), [&data_rate](auto& c){return c*data_rate;});
     
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Eje x", t, v2);
     
     v1 = gyro_allan_variance.col(1);    
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Eje y", t, v2);
     
     v1 = gyro_allan_variance.col(2);   
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Eje z", t, v2);
 
     plt::ylabel("Varianza de Allan [rad^2/s^2]");

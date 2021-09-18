@@ -48,10 +48,10 @@ namespace ramon_calibration
         IMUCalibration();
         ~IMUCalibration();
         int calibrate(void);
-        int correctAccelValues(const Eigen::Ref<const Eigen::MatrixXf> accel_in, Eigen::Ref<Eigen::MatrixXf> accel_out);
+        int correctAccelValues(const Eigen::Ref<const Eigen::MatrixXd> accel_in, Eigen::Ref<Eigen::MatrixXd> accel_out);
         int plotAccel(void);
-        void plotData(const Eigen::Ref<const Eigen::MatrixXf> data_values, float data_rate, std::string x_label, std::string y_label, std::string title);
-        void plotData(const Eigen::Ref<const Eigen::MatrixXf> data_values, const Eigen::Ref<const Eigen::VectorXf> points_status, float data_rate, std::string x_label, std::string y_label, std::string title);
+        void plotData(const Eigen::Ref<const Eigen::MatrixXd> data_values, double data_rate, std::string x_label, std::string y_label, std::string title);
+        void plotData(const Eigen::Ref<const Eigen::MatrixXd> data_values, const Eigen::Ref<const Eigen::VectorXd> points_status, double data_rate, std::string x_label, std::string y_label, std::string title);
         int plotGyro(void);
         int start(void);
 
@@ -64,23 +64,23 @@ namespace ramon_calibration
 
         std::string bag_file_;
         std::string topic_name_;
-        float data_rate_;
-        float t_init_;
+        double data_rate_;
+        double t_init_;
         int tinit_samples_;
-        float t_w_;
+        double t_w_;
         int t_w_samples_;
-        float e_init_k_;
-        float gravity_;
-	    Eigen::MatrixXf accel_values_, accel_values_corr_, accel_values_prom_;
-        Eigen::MatrixXf gyro_values_, gyro_values_corr_;
-        Eigen::MatrixXf mag_values_, mag_values_corr_;
+        double e_init_k_;
+        double gravity_;
+	    Eigen::MatrixXd accel_values_, accel_values_corr_, accel_values_prom_;
+        Eigen::MatrixXd gyro_values_, gyro_values_corr_;
+        Eigen::MatrixXd mag_values_, mag_values_corr_;
 
-        Eigen::VectorXf static_data_;
+        Eigen::VectorXd static_data_;
         Eigen::MatrixX2i static_timestep_;
 
         int debug_;
 
-        float e_init_;
+        double e_init_;
 
         bool start_;
 
@@ -94,7 +94,7 @@ namespace ramon_calibration
         int readBag(void);
         int getStaticDetectorCoefficient(void);
         int getStaticIntervals(void);
-        int getVariance(const Eigen::Ref<const Eigen::MatrixXf> values, Eigen::Ref<Eigen::Vector3f> variance);
+        int getVariance(const Eigen::Ref<const Eigen::MatrixXd> values, Eigen::Ref<Eigen::Vector3d> variance);
     };
 };
 

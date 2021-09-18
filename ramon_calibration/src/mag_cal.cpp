@@ -14,7 +14,7 @@ int main (int argc, char** argv)
     rosbag::Bag bag, bag2;
     bag.open("/home/fdominguez/Documents/bagfiles/mag_cal.bag", rosbag::bagmode::Read);
     bag2.open("/home/fdominguez/Documents/bagfiles/mag_cal_out.bag",rosbag::bagmode::Write);
-    std::vector<float> x_data, y_data, z_data;
+    std::vector<double> x_data, y_data, z_data;
     std::vector<std::string> topics;
     topics.push_back(std::string("/mag_data"));
 

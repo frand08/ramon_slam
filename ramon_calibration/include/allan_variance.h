@@ -2,4 +2,4 @@
 #include <Eigen/Dense>
 #include <iostream>
 
-int allan_variance(Eigen::MatrixXf gyro_values, Eigen::MatrixXf &allan_var);
+int allan_variance(Eigen::MatrixXd gyro_values, Eigen::MatrixXd &allan_var);

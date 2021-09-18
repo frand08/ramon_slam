@@ -97,7 +97,7 @@ int IMUCalibration::calibrate(void)
  * @return
  *  int 0: ok, otherwise, calibration not performed
  */
-int IMUCalibration::correctAccelValues(const Eigen::Ref<const Eigen::MatrixXf> accel_in, Eigen::Ref<Eigen::MatrixXf> accel_out)
+int IMUCalibration::correctAccelValues(const Eigen::Ref<const Eigen::MatrixXd> accel_in, Eigen::Ref<Eigen::MatrixXd> accel_out)
 {
     this->accel_cal_.correctValues(accel_in, accel_out);
 
@@ -114,7 +114,7 @@ int IMUCalibration::correctAccelValues(const Eigen::Ref<const Eigen::MatrixXf> a
  */
 int IMUCalibration::getStaticDetectorCoefficient(void)
 {
-    Eigen::Vector3f var;
+    Eigen::Vector3d var;
     if(this->getVariance(accel_values_.block(0, 0, tinit_samples_, 3), var) < 0)
     {
         return -1;
@@ -137,7 +137,7 @@ int IMUCalibration::getStaticDetectorCoefficient(void)
 int IMUCalibration::getStaticIntervals(void)
 {
     // int count_tw = int(accel_values_.rows() / t_w_samples_);
-    Eigen::Vector3f var_aux;
+    Eigen::Vector3d var_aux;
     int i = tinit_samples_;
     bool static_interval = false;
     int index = 0;
@@ -146,7 +146,7 @@ int IMUCalibration::getStaticIntervals(void)
     int static_time_index = 0;
     int static_time_init = -1;
 
-    static_data_ = Eigen::VectorXf::Constant(accel_values_.rows(), 0);
+    static_data_ = Eigen::VectorXd::Constant(accel_values_.rows(), 0);
     static_timestep_.resize(accel_values_.rows(), 2);
     accel_values_prom_.resize(accel_values_.rows(), 3);
 
@@ -162,7 +162,7 @@ int IMUCalibration::getStaticIntervals(void)
                     static_time_init = i;
                 }
                 index = i + 1;
-                static_data_.segment(i, t_w_samples_) = Eigen::VectorXf::Constant(t_w_samples_, 2);
+                static_data_.segment(i, t_w_samples_) = Eigen::VectorXd::Constant(t_w_samples_, 2);
                 i += t_w_samples_;
                 intervals += t_w_samples_;
             }
@@ -199,9 +199,9 @@ int IMUCalibration::getStaticIntervals(void)
  * @return
  *  int 0: ok.
  */
-int IMUCalibration::getVariance(const Eigen::Ref<const Eigen::MatrixXf> values, Eigen::Ref<Eigen::Vector3f> variance)
+int IMUCalibration::getVariance(const Eigen::Ref<const Eigen::MatrixXd> values, Eigen::Ref<Eigen::Vector3d> variance)
 {
-    Eigen::MatrixXf mean_values, mean_matrix(values.rows(),values.cols());
+    Eigen::MatrixXd mean_values, mean_matrix(values.rows(),values.cols());
 
     if(values.rows() <= 1)
     {
@@ -209,9 +209,9 @@ int IMUCalibration::getVariance(const Eigen::Ref<const Eigen::MatrixXf> values, 
     }
     mean_values = values.colwise().mean();
 
-    mean_matrix << Eigen::MatrixXf::Constant(values.rows(),1,mean_values(0)), 
-                   Eigen::MatrixXf::Constant(values.rows(),1,mean_values(1)), 
-                   Eigen::MatrixXf::Constant(values.rows(),1,mean_values(2));
+    mean_matrix << Eigen::MatrixXd::Constant(values.rows(),1,mean_values(0)), 
+                   Eigen::MatrixXd::Constant(values.rows(),1,mean_values(1)), 
+                   Eigen::MatrixXd::Constant(values.rows(),1,mean_values(2));
     variance = ((values - mean_matrix).array() * (values - mean_matrix).array()).colwise().sum().transpose();
     variance /= (values.rows() - 1);
 
@@ -314,26 +314,26 @@ int IMUCalibration::plotAccel(void)
  * @return
  *  int 0: ok.
  */
-void IMUCalibration::plotData(const Eigen::Ref<const Eigen::MatrixXf> data_values, float data_rate, std::string x_label, std::string y_label, std::string title)
+void IMUCalibration::plotData(const Eigen::Ref<const Eigen::MatrixXd> data_values, double data_rate, std::string x_label, std::string y_label, std::string title)
 {
     // Plot the values
-    Eigen::VectorXf v1 = data_values.col(0);
-    std::vector<float> v2, t(data_values.rows());
+    Eigen::VectorXd v1 = data_values.col(0);
+    std::vector<double> v2, t(data_values.rows());
     std::iota(t.begin(), t.end(), 0);
 
     std::transform(t.begin(), t.end(), t.begin(), [&data_rate](auto& c){return c*data_rate;});
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("X axis", t, v2);
     
     v1 = data_values.col(1);    
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Y axis", t, v2);
     
     v1 = data_values.col(2);   
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Z axis", t, v2);
 
     plt::ylabel(y_label);
@@ -356,31 +356,31 @@ void IMUCalibration::plotData(const Eigen::Ref<const Eigen::MatrixXf> data_value
  * @return
  *  int 0: ok.
  */
-void IMUCalibration::plotData(const Eigen::Ref<const Eigen::MatrixXf> data_values, const Eigen::Ref<const Eigen::VectorXf> points_status, float data_rate, std::string x_label, std::string y_label, std::string title)
+void IMUCalibration::plotData(const Eigen::Ref<const Eigen::MatrixXd> data_values, const Eigen::Ref<const Eigen::VectorXd> points_status, double data_rate, std::string x_label, std::string y_label, std::string title)
 {
     // Plot the values
-    Eigen::VectorXf v1 = data_values.col(0);
-    std::vector<float> v2, t(data_values.rows());
+    Eigen::VectorXd v1 = data_values.col(0);
+    std::vector<double> v2, t(data_values.rows());
     std::iota(t.begin(), t.end(), 0);
 
     std::transform(t.begin(), t.end(), t.begin(), [&data_rate](auto& c){return c*data_rate;});
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("X axis", t, v2);
     
     v1 = data_values.col(1);    
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Y axis", t, v2);
     
     v1 = data_values.col(2);   
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Z axis", t, v2);
 
     v1 = points_status;   
     v2.resize(v1.size());
-    Eigen::VectorXf::Map(&v2[0], v1.size()) = v1;
+    Eigen::VectorXd::Map(&v2[0], v1.size()) = v1;
     plt::named_plot("Static detector", t, v2, "k-");
 
     plt::ylabel(y_label);

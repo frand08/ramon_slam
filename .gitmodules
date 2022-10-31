@@ -1,0 +1,3 @@
+[submodule "ramon_baseboard/stm32f4_ros2/micro_ros_stm32cubemx_utils"]
+	path = ramon_baseboard/stm32f4_ros2/micro_ros_stm32cubemx_utils
+	url = https://github.com/micro-ROS/micro_ros_stm32cubemx_utils
